@@ -68,7 +68,7 @@ static spinlock_t down_cpumask_lock;
 static struct mutex set_speed_lock;
 
 /* Hi speed to bump to from lo speed when load burst (default max) */
-#define DEFAULT_HISPEED_FREQ 1026000
+#define DEFAULT_HISPEED_FREQ 702000
 static u64 hispeed_freq;
 
 /* Bump the CPU to hispeed_freq if its load is >= 50% */
@@ -101,7 +101,7 @@ static unsigned long above_hispeed_delay_val;
  * The CPU will be boosted to this frequency when the screen is
  * touched. input_boost needs to be enabled.
  */
-#define DEFAULT_INPUT_BOOST_FREQ 1512000
+#define DEFAULT_INPUT_BOOST_FREQ 1026000
 static int input_boost_freq;
 
 /*
@@ -244,9 +244,6 @@ static void cpufreq_interactive_timer(unsigned long data)
     
 	if (cpu_load >= up_threshold)
 		new_freq = pcpu->policy->max;
-    	/* if the cpu load is >= 50% lets bump the cpu to hispeed_freq */
-    	else if (cpu_load >= HISPEED_FREQ_LOAD)
-        	new_freq = hispeed_freq;
 	/* Lets divide by up_threshold so that the device uses more freqs */
 	else
 		new_freq = pcpu->policy->max * cpu_load / up_threshold;
@@ -263,6 +260,10 @@ static void cpufreq_interactive_timer(unsigned long data)
 	}
     
 	new_freq = pcpu->freq_table[index].frequency;
+	
+	/* if the cpu load is >= 50% lets bump the cpu to hispeed_freq */
+    if (cpu_load >= HISPEED_FREQ_LOAD && new_freq < hispeed_freq)
+        new_freq = hispeed_freq;
     
 	/* 
 	 * we want cpu0 to be the only core blocked for freq changes while
