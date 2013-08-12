@@ -10,7 +10,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * Simple no bullshit hot[un]plug driver for SMP
  */
 
 #include <linux/kernel.h>
@@ -67,12 +66,12 @@ static void scale_interactive_tunables(unsigned int above_hispeed_delay,
 	scale_min_sample_time(min_sample_time);
 }
 
-static void online_core(void)
+static bool online_core(void)
 {
 	int cpu;
 	
 	if (stats.online_cpus > 3)
-		return;
+		return false;
 	
 	for_each_possible_cpu(cpu) 
 	{
@@ -85,6 +84,8 @@ static void online_core(void)
 	
 	second_counter = 4;
 	third_counter = 0;
+	
+	return true;
 }
 
 static bool offline_core(int cpu)
@@ -123,7 +124,6 @@ static void __cpuinit decide_hotplug_func(struct work_struct *work)
 			{
 				online_core();
 			}
-			
 			goto end;
 		}
 	}
@@ -136,9 +136,11 @@ static void __cpuinit decide_hotplug_func(struct work_struct *work)
 		if (load >= stats.default_first_level 
 			&& stats.now - stats.time_stamp[0] > SEC_THRESHOLD)
 		{
-			online_core();
-			stats.time_stamp[0] = stats.now;
-			goto end;
+			if (online_core() == true)
+			{
+				stats.time_stamp[0] = stats.now;
+				goto end;
+			}
 		}
 		else if (load <= stats.default_fourth_level && cpu != 0 && 
 		stats.now - stats.time_stamp[0] > SEC_THRESHOLD)
@@ -217,11 +219,12 @@ end:
 			case 1: scale_interactive_tunables(10000, 20000, 40000); break;
 			case 2: scale_interactive_tunables(20000, 40000, 20000); break;
 			case 3: scale_interactive_tunables(20000, 30000, 40000); break;
-			case 4: scale_interactive_tunables(0, 20000, 80000); break;
+			case 4: scale_interactive_tunables(10000, 20000, 80000); break;
 		}
 	}
 	
 	/*
+	cpu = 0;
 	pr_info("----HOTPLUG DEBUG INFO----\n");
 	pr_info("Cores on:\t%d", num_online_cpus());
 	pr_info("Core0:\t%d", load_array[0]);
@@ -229,6 +232,10 @@ end:
 	pr_info("Core2:\t%d", load_array[2]);
 	pr_info("Core3:\t%d", load_array[3]);
 	pr_info("Av Load:\t%d", av_load);
+	for_each_online_cpu(cpu)
+	{
+	pr_info("Cur_max%d:\t%d",cpu,get_cur_max(cpu));
+	}
 	pr_info("-------------------------");
 	pr_info("Up count:\t%d\n",second_counter);
 	pr_info("Dw count:\t%d\n",third_counter);
