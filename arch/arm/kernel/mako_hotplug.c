@@ -34,6 +34,7 @@
 #define DEFAULT_CORES_ON_TOUCH 2
 #define DEFAULT_COUNTER 10
 #define SEC_THRESHOLD 200
+#define BOOST_THRESHOLD 5000
 #define TIMER HZ
 
 struct cpu_stats
@@ -45,7 +46,8 @@ struct cpu_stats
 	unsigned int default_fourth_level;
 	unsigned int cores_on_touch;
 	unsigned int suspend_frequency;
-	unsigned long time_stamp;
+	unsigned long time_stamp[2];
+	unsigned long now;
 };
 
 static struct cpu_stats stats;
@@ -85,11 +87,11 @@ static void online_core(void)
 	third_counter = 0;
 }
 
-static void offline_core(int cpu)
+static bool offline_core(int cpu)
 {   
-	if (stats.online_cpus == 1 || (is_touching && 
-		stats.online_cpus == stats.cores_on_touch))
-		return;	
+	if (stats.now - stats.time_stamp[1] < BOOST_THRESHOLD && 
+	stats.online_cpus == stats.cores_on_touch)
+		return false;	
 	
 	if(cpu)
 	{
@@ -97,27 +99,33 @@ static void offline_core(int cpu)
 	}
 	
 	second_counter = 0;
-	third_counter = 4;	  
+	third_counter = 4;
+	
+	return true;  
 }
 
 static void __cpuinit decide_hotplug_func(struct work_struct *work)
 {
 	int cpu, cpu_boost, lowest_cpu = 0;
 	unsigned int i = 0, load, av_load = 0, lowest_cpu_load = 100;
-	unsigned long now;
 	//int load_array[4] = {};
 
-	now = ktime_to_ms(ktime_get());
+	stats.now = ktime_to_ms(ktime_get());
 	stats.online_cpus = num_online_cpus();
 
-	if (is_touching && stats.online_cpus < stats.cores_on_touch)
+	if (is_touching)
 	{
-		for(i = 0; i < (stats.cores_on_touch - stats.online_cpus); i++)
-		{
-			online_core();
-		}
+		stats.time_stamp[1] = stats.now;
 		
-		goto end;
+		if (stats.online_cpus < stats.cores_on_touch)
+		{
+			for(i = 0; i < (stats.cores_on_touch - stats.online_cpus); i++)
+			{
+				online_core();
+			}
+			
+			goto end;
+		}
 	}
 
 	for_each_online_cpu(cpu) 
@@ -126,18 +134,20 @@ static void __cpuinit decide_hotplug_func(struct work_struct *work)
 		//load_array[cpu] = load;
 		
 		if (load >= stats.default_first_level 
-			&& now - stats.time_stamp > SEC_THRESHOLD)
+			&& stats.now - stats.time_stamp[0] > SEC_THRESHOLD)
 		{
 			online_core();
-			stats.time_stamp = now;
+			stats.time_stamp[0] = stats.now;
 			goto end;
 		}
-		else if (load <= stats.default_fourth_level 
-			&& cpu != 0  && now - stats.time_stamp > SEC_THRESHOLD)
+		else if (load <= stats.default_fourth_level && cpu != 0 && 
+		stats.now - stats.time_stamp[0] > SEC_THRESHOLD)
 		{
-			offline_core(cpu);
-			stats.time_stamp = now;
-			goto end;
+			if (offline_core(cpu) == true)
+			{
+				stats.time_stamp[0] = stats.now;
+				goto end;
+			}
 		}
 		
 		if (load < lowest_cpu_load && cpu != 0)
@@ -355,7 +365,8 @@ int __init mako_hotplug_init(void)
 	pr_info("Mako Hotplug driver started.\n");
 	
 	/* init everything here */
-	stats.time_stamp = 0;
+	stats.time_stamp[0] = 0;
+	stats.time_stamp[1] = 0;
 	stats.online_cpus = num_online_cpus();
 	stats.default_first_level = DEFAULT_FIRST_LEVEL;
 	stats.default_second_level = DEFAULT_SECOND_LEVEL;
@@ -363,6 +374,7 @@ int __init mako_hotplug_init(void)
 	stats.default_fourth_level = DEFAULT_FOURTH_LEVEL;
 	stats.suspend_frequency = DEFAULT_SUSPEND_FREQ;
 	stats.cores_on_touch = DEFAULT_CORES_ON_TOUCH;
+	stats.now = 0;
 
 	wq = alloc_workqueue("mako_hotplug_workqueue", 
 					WQ_UNBOUND | WQ_RESCUER | WQ_FREEZABLE, 1);
