@@ -264,9 +264,6 @@ static void cpufreq_interactive_timer(unsigned long data)
 
 	if (cpu_load >= up_threshold)
 		new_freq = max_freq;
-	/* if the cpu load is >= 50% lets bump the cpu to hispeed_freq */
-	else if (cpu_load >= HISPEED_FREQ_LOAD && new_freq < hispeed_freq)
-		new_freq = hispeed_freq;
     
 	if (new_freq <= hispeed_freq)
 		pcpu->hispeed_validate_time = pcpu->timer_run_time;
