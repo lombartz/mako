@@ -29,7 +29,6 @@
 #define HEATWAVE_FREQ 7
 #define LOW_FREQ 6
 #define PANIC_FREQ 3
-#define NICE_DELTA_TEMP 3
 #define FAST_COUNTER 4
 #define SLOW_COUNTER 8
 
@@ -86,14 +85,9 @@ static void limit_cpu_freqs(unsigned int freq)
 	}
 }
 
-static unsigned short counting_range(long temp, long old_temp)
+static unsigned short counting_range(long temp)
 {
-	short delta = temp - old_temp;
-	
-	if (delta < 0){ delta = delta * -1; }
-	
-	if (delta > NICE_DELTA_TEMP || temp >= temp_threshold + 10 ||
-			temp <= temp_threshold - 10)
+	if (temp >= temp_threshold + 5 || temp <= temp_threshold - 5)
 		return FAST_COUNTER;
 	else
 		return SLOW_COUNTER;
@@ -105,17 +99,11 @@ static void check_temp(struct work_struct *work)
 	static unsigned short counter, range;
 	static int limit_init;
 	static unsigned int polling;
-	static long temp, old_temp;
-	long temp_copy;
+	static long temp;
 	int ret = 0;
-	
-	temp_copy = temp;
 	
 	tsens_dev.sensor_num = msm_thermal_info.sensor_id;
 	tsens_get_temp(&tsens_dev, &temp);
-	
-	if (temp != temp_copy)
-		old_temp = temp_copy;
 		
 	if (unlikely(!limit_init))
 	{
@@ -157,7 +145,7 @@ static void check_temp(struct work_struct *work)
 				limit_cpu_freqs(table[limit_idx].frequency);
 			}
 				
-			range = counting_range(temp, old_temp);
+			range = counting_range(temp);
 			counter = 0;
 		}
 		else
@@ -174,7 +162,7 @@ static void check_temp(struct work_struct *work)
 			limit_idx++;
 			limit_cpu_freqs(table[limit_idx].frequency);
 			
-			range = counting_range(temp, old_temp);
+			range = counting_range(temp);
 			counter = 0;
 		}
 		else
@@ -188,7 +176,7 @@ static void check_temp(struct work_struct *work)
 	{
 		if (counter >= range)
 		{
-			range = counting_range(temp, old_temp);
+			range = counting_range(temp);
 			counter = 0;
 		}
 		else
@@ -205,7 +193,6 @@ static void check_temp(struct work_struct *work)
 	
 /*	pr_info("---------------------");
 	pr_info("Temp:\t\t%ld",temp);
-	pr_info("OldTemp:\t%ld",old_temp);
 	pr_info("Counter:\t%d",counter);
 	pr_info("Range:\t%d",range);
 	pr_info("CurFreq:\t%d",table[limit_idx].frequency);
