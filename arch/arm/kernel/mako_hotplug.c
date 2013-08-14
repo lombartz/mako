@@ -139,7 +139,7 @@ static void __cpuinit decide_hotplug_func(struct work_struct *work)
 		if (load >= stats.default_first_level 
 			&& stats.now - stats.time_stamp[0] > SEC_THRESHOLD)
 		{
-			if (online_core() == true)
+			if (online_core())
 			{
 				stats.time_stamp[0] = stats.now;
 				goto end;
@@ -148,7 +148,7 @@ static void __cpuinit decide_hotplug_func(struct work_struct *work)
 		else if (load <= stats.default_fourth_level && cpu != 0 && 
 		stats.now - stats.time_stamp[0] > SEC_THRESHOLD)
 		{
-			if (offline_core(cpu) == true)
+			if (offline_core(cpu))
 			{
 				stats.time_stamp[0] = stats.now;
 				goto end;
@@ -229,7 +229,7 @@ end:
 	
 		for_each_possible_cpu(cpu_boost)
 		{
-			if (cpu_online(cpu_boost) && i <= stats.cores_on_touch)
+			if (cpu_online(cpu_boost) && i < stats.cores_on_touch)
 			{
 				set_core_boost(cpu_boost, true);
 				i++;

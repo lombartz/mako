@@ -123,7 +123,7 @@ static ssize_t cores_on_touch_store(struct device *dev, struct device_attribute 
     
     sscanf(buf, "%u", &new_val);
     
-    if (new_val != get_cores_on_touch() && new_val >= 0 && new_val <= 4)
+    if (new_val != get_cores_on_touch() && new_val >= 0 && new_val <= 2)
     {
         update_cores_on_touch(new_val);
     }
