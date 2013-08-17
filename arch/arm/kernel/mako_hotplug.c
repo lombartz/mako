@@ -193,8 +193,8 @@ end:
 		{
 			case 1: scale_interactive_tunables(10000, 20000, 40000); break;
 			case 2: scale_interactive_tunables(20000, 30000, 20000); break;
-			case 3: scale_interactive_tunables(20000, 40000, 40000); break;
-			case 4: scale_interactive_tunables(10000, 40000, 60000); break;
+			case 3: scale_interactive_tunables(20000, 30000, 40000); break;
+			case 4: scale_interactive_tunables(10000, 20000, 60000); break;
 		}
 	}
 	
