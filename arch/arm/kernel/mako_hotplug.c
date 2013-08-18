@@ -50,11 +50,11 @@ static short third_counter = 0;
 
 void set_core_boost(int cpu, bool boost);
 
-static void scale_interactive_tunables(unsigned int above_hispeed_delay,
+static void scale_interactive_tunables(unsigned int up_threshold,
 	unsigned int timer_rate, 
 	unsigned int min_sample_time)
 {
-	scale_above_hispeed_delay(above_hispeed_delay);
+	scale_up_threshold(up_threshold);
 	scale_timer_rate(timer_rate);
 	scale_min_sample_time(min_sample_time);
 }
@@ -191,15 +191,14 @@ end:
 		// above_hispeed_delay, timer_rate, min_sample_time
 		switch(num_online_cpus())
 		{
-			case 1: scale_interactive_tunables(10000, 20000, 40000); break;
-			case 2: scale_interactive_tunables(20000, 30000, 20000); break;
-			case 3: scale_interactive_tunables(20000, 30000, 40000); break;
-			case 4: scale_interactive_tunables(10000, 20000, 60000); break;
+			case 1: scale_interactive_tunables(95, 30000, 10000); break;
+			case 2: scale_interactive_tunables(90, 40000, 20000); break;
+			case 3: scale_interactive_tunables(90, 30000, 40000); break;
+			case 4: scale_interactive_tunables(90, 20000, 80000); break;
 		}
 	}
 	
-	/*
-	cpu = 0;
+/*	cpu = 0;
 	pr_info("----HOTPLUG DEBUG INFO----\n");
 	pr_info("Cores on:\t%d", num_online_cpus());
 	pr_info("Core0:\t%d", load_array[0]);
@@ -209,8 +208,7 @@ end:
 	pr_info("Av Load:\t%d", av_load);
 	pr_info("-------------------------");
 	pr_info("Up count:\t%d\n",first_counter);
-	pr_info("Dw count:\t%d\n",third_counter);
-	*/
+	pr_info("Dw count:\t%d\n",third_counter);*/
 	
 	queue_delayed_work(wq, &decide_hotplug, msecs_to_jiffies(TIMER));
 }
@@ -230,7 +228,7 @@ static void __cpuinit mako_hotplug_early_suspend(struct early_suspend *handler)
 		if (cpu) {cpu_down(cpu);}
 		core_boost[cpu] = false;
 	}
-	scale_interactive_tunables(10000, 20000, 40000);
+	scale_interactive_tunables(95, 30000, 10000);
 	
 	is_touching = false;
 	first_counter = 0;
@@ -253,7 +251,7 @@ static void __cpuinit mako_hotplug_late_resume(struct early_suspend *handler)
 		core_boost[cpu] = true;
 		if (!cpu_online(cpu)) {cpu_up(cpu); break;}
 	}
-	scale_interactive_tunables(20000, 30000, 20000);
+	scale_interactive_tunables(90, 40000, 20000);
 	
 	freq_boosted_time = ktime_to_ms(ktime_get());
 	is_touching = true;

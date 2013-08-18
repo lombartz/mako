@@ -765,6 +765,12 @@ void scale_min_sample_time(unsigned int new_min_sample_time)
 		min_sample_time = new_min_sample_time;
 }
 
+void scale_up_threshold(unsigned int new_up_threshold)
+{
+	if (dynamic_scaling && up_threshold != new_up_threshold)
+		up_threshold = new_up_threshold;
+}
+
 unsigned int get_input_boost_freq()
 {
 	return input_boost_freq;
