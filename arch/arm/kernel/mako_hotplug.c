@@ -215,7 +215,7 @@ end:
 
 static void __cpuinit mako_hotplug_early_suspend(struct early_suspend *handler)
 {	 
-	int cpu;
+	unsigned int cpu;
 
 	/* cancel the hotplug work when the screen is off and flush the WQ */
 	cancel_delayed_work_sync(&decide_hotplug);
@@ -243,13 +243,18 @@ static void __cpuinit mako_hotplug_early_suspend(struct early_suspend *handler)
 
 static void __cpuinit mako_hotplug_late_resume(struct early_suspend *handler)
 {  
-	int cpu;
+	struct cpufreq_policy policy;
+	unsigned int cpu;
 
-	/* online 1 core when the screen goes online */
-	for_each_possible_cpu(cpu) 
+	/* 2 online cores and max freq when the screen goes online */
+	for (cpu = 0; cpu < 2; cpu++)
 	{
+		if (!cpu_online(cpu))
+			cpu_up(cpu);
+			
 		core_boost[cpu] = true;
-		if (!cpu_online(cpu)) {cpu_up(cpu); break;}
+		cpufreq_get_policy(&policy, cpu);
+		__cpufreq_driver_target(&policy, 1026000, CPUFREQ_RELATION_H);
 	}
 	scale_interactive_tunables(90, 40000, 20000);
 	
