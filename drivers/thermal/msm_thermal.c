@@ -28,6 +28,7 @@
 #define LOW_FREQ 8
 #define FAST_COUNTER 4
 #define SLOW_COUNTER 8
+#define HISTORY_SIZE 10
 
 unsigned int temp_threshold = 65;
 module_param(temp_threshold, int, 0755);
@@ -91,10 +92,15 @@ static unsigned short counting_range(long temp)
 static void check_temp(struct work_struct *work)
 {
 	struct tsens_device tsens_dev;
-	static unsigned short counter, range;
+	static unsigned short counter, heat_counter, range;
 	static int limit_init;
 	static unsigned int polling;
 	static long temp;
+	static unsigned short history[HISTORY_SIZE];
+	static unsigned short full_heat;
+	bool heatwave;
+	short av_heat;
+
 	int ret = 0;
 	
 	tsens_dev.sensor_num = msm_thermal_info.sensor_id;
@@ -109,8 +115,23 @@ static void check_temp(struct work_struct *work)
 			limit_init = 1;
 	}
 	
-	if (unlikely((temp >= temp_threshold + 20 || temp >= 95) 
-			&& limit_idx > LOW_FREQ))
+	full_heat -= history[heat_counter];
+	history[heat_counter] = (short) temp;
+	
+	full_heat += (short) temp;
+
+	if (unlikely(++heat_counter >= HISTORY_SIZE))
+		heat_counter = 0;
+
+	av_heat = full_heat / HISTORY_SIZE;
+	
+	if (unlikely(temp - av_heat >= 10))
+		heatwave = true;
+	else
+		heatwave = false;
+	
+	if (unlikely(((temp >= temp_threshold + 20 || temp >= 90) 
+			&& limit_idx > LOW_FREQ)) || heatwave)
 	{
 		limit_idx = LOW_FREQ;
 		limit_cpu_freqs(table[limit_idx].frequency);
@@ -153,7 +174,7 @@ static void check_temp(struct work_struct *work)
 		
 		polling = HZ/4;
 	}
-	else if (temp >= temp_threshold - 10)
+	else if (temp >= temp_threshold - 15)
 	{
 		if (counter >= range)
 		{
@@ -172,8 +193,10 @@ static void check_temp(struct work_struct *work)
 		polling = HZ;
 	}
 	
-/*	pr_info("---------------------");
+/*	if (heatwave){pr_info("HEATWAVE");}
+	pr_info("---------------------");
 	pr_info("Temp:\t\t%ld",temp);
+	pr_info("Av Temp:\t%d",av_heat);
 	pr_info("Counter:\t%d",counter);
 	pr_info("Range:\t%d",range);
 	pr_info("CurFreq:\t%d",table[limit_idx].frequency);
