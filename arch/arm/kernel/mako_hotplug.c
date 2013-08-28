@@ -102,6 +102,7 @@ static void __cpuinit decide_hotplug_func(struct work_struct *work)
 {
 	unsigned int cpu, cpu_boost, lowest_cpu = 0;
 	unsigned int i = 0, load, av_load = 0, lowest_cpu_load = 100;
+	unsigned short num_cpus;
 	//short load_array[4] = {};
 
 	now = ktime_to_ms(ktime_get());
@@ -170,8 +171,9 @@ static void __cpuinit decide_hotplug_func(struct work_struct *work)
 	}
 	
 end:
+	num_cpus = num_online_cpus();
 	
-	if (online_cpus != num_online_cpus())
+	if (online_cpus != num_cpus)
 	{
 		i = 0;
 	
@@ -189,14 +191,19 @@ end:
 		}
 	
 		// above_hispeed_delay, timer_rate, min_sample_time
-		switch(num_online_cpus())
+		switch(num_cpus)
 		{
-			case 1: scale_interactive_tunables(95, 30000, 10000); break;
+			case 1: scale_interactive_tunables(95, 30000, 15000); break;
 			case 2: scale_interactive_tunables(90, 40000, 20000); break;
 			case 3: scale_interactive_tunables(90, 30000, 40000); break;
 			case 4: scale_interactive_tunables(90, 20000, 80000); break;
 		}
 	}
+	
+	if (num_cpus == 1 && gpu_idle)
+		scale_interactive_tunables(95, 30000, 10000);
+	else
+		scale_interactive_tunables(90, 30000, 15000);
 	
 /*	cpu = 0;
 	pr_info("----HOTPLUG DEBUG INFO----\n");

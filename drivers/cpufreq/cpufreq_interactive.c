@@ -296,8 +296,8 @@ static void cpufreq_interactive_timer(unsigned long data)
 		if (ktime_to_ms(ktime_get()) - 
 				freq_boosted_time >= input_boost_freq_duration)
 			is_touching = false;
-		else if (new_freq < input_boost_freq || 
-					pcpu->policy->cur < input_boost_freq)
+		else if ((new_freq < input_boost_freq || 
+					pcpu->policy->cur < input_boost_freq) && !gpu_idle)
 			new_freq = input_boost_freq;
 	}
     
