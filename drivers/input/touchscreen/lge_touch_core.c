@@ -811,6 +811,7 @@ static void touch_work_func(struct work_struct *work)
 	int ret;
 
     is_touching = true;
+    idle_counter = 0;
 	freq_boosted_time = ktime_to_ms(ktime_get());
     
 	atomic_dec(&ts->next_work);

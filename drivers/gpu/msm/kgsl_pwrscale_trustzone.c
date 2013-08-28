@@ -22,6 +22,7 @@
 #include <mach/socinfo.h>
 #include <mach/scm.h>
 #include <linux/module.h>
+#include <linux/hotplug.h>
 
 #include "kgsl.h"
 #include "kgsl_pwrscale.h"
@@ -143,23 +144,53 @@ static int ramp_up_threshold = 7000;
 module_param_named(simple_ramp_threshold, ramp_up_threshold, int, 0664);
 
 static unsigned int history[HISTORY_SIZE] = {0};
-static unsigned int counter = 0;
+static unsigned short load_counter = 0;
 static unsigned int full_load = 0;
+/* extern var */
+bool gpu_idle;
+unsigned short idle_counter;
 
 static int simple_governor(struct kgsl_device *device, int idle_stat)
 {
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	unsigned int total = 0;
-
-	full_load -= history[counter];
-	history[counter] = idle_stat;
+	
+	full_load -= history[load_counter];
+	history[load_counter] = idle_stat;
 	
 	full_load += idle_stat;
 
-	if (unlikely(++counter >= HISTORY_SIZE))
-		counter = 0;
+	if (unlikely(++load_counter >= HISTORY_SIZE))
+		load_counter = 0;
 
 	total = full_load / HISTORY_SIZE;
+	
+/*	pr_info("Num Pwrlevels:\t%d",pwr->num_pwrlevels);
+	pr_info("Active Pwrlevel:\t%d",pwr->active_pwrlevel);
+	pr_info("Current Load:\t%d",total);
+	pr_info("---------------------------------");
+	if(gpu_idle){pr_info("GPU IDLE");}
+	else{pr_info("GPU BUSY");}
+	pr_info("---------------------------------");*/
+		
+	if (pwr->active_pwrlevel == 3 && total > 15000)
+	{
+		if (idle_counter < 10)
+			idle_counter += 1;
+				
+		if (idle_counter >= 10)				
+			gpu_idle = true;
+			
+		return 1;
+	}
+	else
+	{
+		if (idle_counter > 0)
+			idle_counter -= 1;
+			
+		if (idle_counter <= 0)
+			gpu_idle = false;
+	}
     
 	/* it's currently busy */
 	if (total < ramp_up_threshold)
@@ -171,7 +202,7 @@ static int simple_governor(struct kgsl_device *device, int idle_stat)
 	}
 	/* idle case */
 	else
-	{
+	{	
 		if ((pwr->active_pwrlevel >= 0) &&
 			(pwr->active_pwrlevel < (pwr->num_pwrlevels - 1)))
 			return 1;
@@ -200,7 +231,7 @@ static void tz_idle(struct kgsl_device *device, struct kgsl_pwrscale *pwrscale)
 	 * has passed since the last run.
 	 */
 	if ((stats.total_time == 0) ||
-		(priv->bin.total_time < FLOOR))
+			(priv->bin.total_time < FLOOR))
 		return;
 
 	/* If there is an extended block of busy processing,
@@ -219,7 +250,6 @@ static void tz_idle(struct kgsl_device *device, struct kgsl_pwrscale *pwrscale)
 		kgsl_pwrctrl_pwrlevel_change(device,
 					     pwr->active_pwrlevel + val);
 }
-
 static void tz_busy(struct kgsl_device *device,
 	struct kgsl_pwrscale *pwrscale)
 {
@@ -236,6 +266,7 @@ static void tz_sleep(struct kgsl_device *device,
      * at 320MHz on the GPU? Makes no sense to me. Lets change the pwrlevel
      * directly and sleep at its lowest frequency 128MHz.
      */
+    gpu_idle = true;
 	kgsl_pwrctrl_pwrlevel_change(device, 3);
 	priv->no_switch_cnt = 0;
 	priv->bin.total_time = 0;

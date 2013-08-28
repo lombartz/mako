@@ -34,6 +34,8 @@ extern unsigned int get_min_sample_time(void);
 extern bool get_dynamic_scaling(void);
 extern unsigned int get_hispeed_freq(void);
 
+extern bool gpu_idle;
+extern unsigned short idle_counter;
 extern bool is_touching;
 extern u64 freq_boosted_time;
 
