@@ -165,7 +165,7 @@ static int simple_governor(struct kgsl_device *device, int idle_stat)
 
 	total = full_load / HISTORY_SIZE;
 	
-/*	pr_info("Num Pwrlevels:\t%d",pwr->num_pwrlevels);
+	/*pr_info("Num Pwrlevels:\t%d",pwr->num_pwrlevels);
 	pr_info("Active Pwrlevel:\t%d",pwr->active_pwrlevel);
 	pr_info("Current Load:\t%d",total);
 	pr_info("---------------------------------");
@@ -178,7 +178,7 @@ static int simple_governor(struct kgsl_device *device, int idle_stat)
 		if (idle_counter < 10)
 			idle_counter += 1;
 				
-		if (idle_counter >= 10)				
+		if (idle_counter >= 10)			
 			gpu_idle = true;
 			
 		return 1;
@@ -189,7 +189,11 @@ static int simple_governor(struct kgsl_device *device, int idle_stat)
 			idle_counter -= 1;
 			
 		if (idle_counter <= 0)
+		{
+			if (gpu_idle && is_touching)
+				touchboost_func();
 			gpu_idle = false;
+		}
 	}
     
 	/* it's currently busy */
@@ -211,7 +215,7 @@ static int simple_governor(struct kgsl_device *device, int idle_stat)
 	return 0;
 }
 
-static void tz_idle(struct kgsl_device *device, struct kgsl_pwrscale *pwrscale)
+static void __cpuinit tz_idle(struct kgsl_device *device, struct kgsl_pwrscale *pwrscale)
 {
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	struct tz_priv *priv = pwrscale->priv;
@@ -267,6 +271,7 @@ static void tz_sleep(struct kgsl_device *device,
      * directly and sleep at its lowest frequency 128MHz.
      */
     gpu_idle = true;
+    idle_counter = 10;
 	kgsl_pwrctrl_pwrlevel_change(device, 3);
 	priv->no_switch_cnt = 0;
 	priv->bin.total_time = 0;

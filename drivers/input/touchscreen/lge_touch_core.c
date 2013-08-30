@@ -54,6 +54,9 @@ static int is_width_minor;
 /* extern vars */
 bool is_touching;
 u64 freq_boosted_time;
+unsigned long time_stamp;
+
+void touchboost_func(void);
 
 #define LGE_TOUCH_ATTR(_name, _mode, _show, _store)               \
 	struct lge_touch_attribute lge_touch_attr_##_name =       \
@@ -802,7 +805,7 @@ static void touch_input_report(struct lge_touch_data *ts)
 /*
  * Touch work function
  */
-static void touch_work_func(struct work_struct *work)
+static void __cpuinit touch_work_func(struct work_struct *work)
 {
 	struct lge_touch_data *ts =
 			container_of(work, struct lge_touch_data, work);
@@ -810,9 +813,12 @@ static void touch_work_func(struct work_struct *work)
 	int next_work = 0;
 	int ret;
 
+	if (!is_touching)
+		touchboost_func();
+
     is_touching = true;
     idle_counter = 0;
-	freq_boosted_time = ktime_to_ms(ktime_get());
+	freq_boosted_time = time_stamp = ktime_to_ms(ktime_get());
     
 	atomic_dec(&ts->next_work);
 	ts->ts_data.total_num = 0;

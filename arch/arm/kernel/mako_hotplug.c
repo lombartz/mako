@@ -42,13 +42,11 @@ static unsigned int default_first_level;
 static unsigned int default_third_level;
 static unsigned int cores_on_touch;
 static unsigned int suspend_frequency;
-static unsigned long time_stamp;
 static unsigned long now;
 static bool core_boost[4];
+static bool old_gpu_idle;
 static short first_counter = 0;
 static short third_counter = 0;
-
-void set_core_boost(int cpu, bool boost);
 
 static void scale_interactive_tunables(unsigned int up_threshold,
 	unsigned int timer_rate, 
@@ -59,12 +57,24 @@ static void scale_interactive_tunables(unsigned int up_threshold,
 	scale_min_sample_time(min_sample_time);
 }
 
-static bool online_core(void)
+static void scaling(unsigned short num_cpus)
+{
+	// above_hispeed_delay, timer_rate, min_sample_time
+	switch(num_cpus)
+	{
+		case 1: scale_interactive_tunables(95, 30000, 15000); break;
+		case 2: scale_interactive_tunables(90, 40000, 20000); break;
+		case 3: scale_interactive_tunables(90, 30000, 40000); break;
+		case 4: scale_interactive_tunables(90, 20000, 80000); break;
+	}
+}
+
+static void __cpuinit online_core(unsigned short cpus_num)
 {
 	unsigned int cpu;
 	
-	if (online_cpus > 3)
-		return false;
+	if (cpus_num > 3)
+		return;
 	
 	for_each_possible_cpu(cpu) 
 	{
@@ -75,52 +85,68 @@ static bool online_core(void)
 		}
 	}
 	
+	if (cpus_num < cores_on_touch)
+		core_boost[cpu] = true;
+	
 	first_counter = 4;
 	third_counter = 0;
 	
-	return true;
+	return;
 }
 
-static bool offline_core(unsigned int cpu)
+static void __cpuinit offline_core(unsigned int cpu)
 {   
-	if ((now - time_stamp < BOOST_THRESHOLD && 
-			online_cpus == cores_on_touch) || !cpu)
-		return false;	
-	
-	if(cpu)
-	{
-		cpu_down(cpu);
-	}
+	if (!cpu)
+		return;
+
+	core_boost[cpu] = false;	
+	cpu_down(cpu);
 	
 	first_counter = 0;
 	third_counter = 4;
 	
-	return true;  
+	return;
+}
+
+void __cpuinit touchboost_func(void)
+{	
+	unsigned int i, core, cpus_num, boost_freq;
+	struct cpufreq_policy policy;
+	
+	cpus_num = num_online_cpus();
+	boost_freq = get_input_boost_freq();
+	
+	if (cpus_num < cores_on_touch)
+	{
+		for(i = cpus_num; i < cores_on_touch; i++)
+		{
+			online_core(cpus_num);
+		}
+		scaling(i);
+	}
+	core = 0;
+	
+	for_each_possible_cpu(core)
+	{
+		if (core_boost[core])
+		{
+			cpufreq_get_policy(&policy, core);
+			if (policy.cur < boost_freq)
+				__cpufreq_driver_target(&policy, boost_freq, 
+						CPUFREQ_RELATION_H);
+		}
+	}
 }
 
 static void __cpuinit decide_hotplug_func(struct work_struct *work)
 {
-	unsigned int cpu, cpu_boost, lowest_cpu = 0;
-	unsigned int i = 0, load, av_load = 0, lowest_cpu_load = 100;
+	unsigned int cpu, lowest_cpu = 0;
+	unsigned int load, av_load = 0, lowest_cpu_load = 100;
 	unsigned short num_cpus;
 	//short load_array[4] = {};
 
 	now = ktime_to_ms(ktime_get());
 	online_cpus = num_online_cpus();
-
-	if (is_touching)
-	{
-		time_stamp = now;
-		
-		if (online_cpus < cores_on_touch)
-		{
-			for(i = 0; i < (cores_on_touch - online_cpus); i++)
-			{
-				online_core();
-			}
-			goto end;
-		}
-	}
 
 	for_each_online_cpu(cpu) 
 	{
@@ -128,7 +154,8 @@ static void __cpuinit decide_hotplug_func(struct work_struct *work)
 		//load_array[cpu] = load;
 		
 		if (load < lowest_cpu_load && cpu &&
-				!(core_boost[cpu] && is_touching))
+				!(core_boost[cpu] && 
+				now - time_stamp < BOOST_THRESHOLD))
 		{
 			lowest_cpu = cpu;
 			lowest_cpu_load = load;
@@ -136,7 +163,7 @@ static void __cpuinit decide_hotplug_func(struct work_struct *work)
 		
 		av_load += load;
 	}
-	
+
 	av_load = av_load / online_cpus;
 	
 	if (av_load >= default_first_level)
@@ -148,7 +175,7 @@ static void __cpuinit decide_hotplug_func(struct work_struct *work)
 			third_counter -= 2;
 			
 		if (first_counter >= DEFAULT_COUNTER)
-			online_core();	
+			online_core(online_cpus);	
 	}
 	else if (av_load <= default_third_level)
 	{
@@ -170,40 +197,28 @@ static void __cpuinit decide_hotplug_func(struct work_struct *work)
 			third_counter--; 
 	}
 	
-end:
 	num_cpus = num_online_cpus();
 	
-	if (online_cpus != num_cpus)
+	if (num_cpus == 1)
 	{
-		i = 0;
-	
-		for_each_possible_cpu(cpu_boost)
+		if (online_cpus != num_cpus)
+			old_gpu_idle = (gpu_idle)?false:true;
+		
+		if (gpu_idle && !old_gpu_idle)
 		{
-			if (cpu_online(cpu_boost) && i < cores_on_touch)
-			{
-				core_boost[cpu_boost] = true;
-				i++;
-			}
-			else
-			{
-				core_boost[cpu_boost] = false;
-			}
+			scale_interactive_tunables(95, 30000, 10000);
+			old_gpu_idle = true;
 		}
-	
-		// above_hispeed_delay, timer_rate, min_sample_time
-		switch(num_cpus)
+		else if (!gpu_idle && old_gpu_idle)
 		{
-			case 1: scale_interactive_tunables(95, 30000, 15000); break;
-			case 2: scale_interactive_tunables(90, 40000, 20000); break;
-			case 3: scale_interactive_tunables(90, 30000, 40000); break;
-			case 4: scale_interactive_tunables(90, 20000, 80000); break;
+			scale_interactive_tunables(90, 30000, 15000);
+			old_gpu_idle = false;
 		}
 	}
-	
-	if (num_cpus == 1 && gpu_idle)
-		scale_interactive_tunables(95, 30000, 10000);
-	else
-		scale_interactive_tunables(90, 30000, 15000);
+	else if (online_cpus != num_cpus)
+	{
+		scaling(num_cpus);
+	}
 	
 /*	cpu = 0;
 	pr_info("----HOTPLUG DEBUG INFO----\n");
@@ -232,8 +247,12 @@ static void __cpuinit mako_hotplug_early_suspend(struct early_suspend *handler)
 	
 	for_each_possible_cpu(cpu) 
 	{
-		if (cpu) {cpu_down(cpu);}
-		core_boost[cpu] = false;
+		if (cpu)
+		{
+			core_boost[cpu] = false;
+			cpu_down(cpu);
+		}
+		
 	}
 	scale_interactive_tunables(95, 30000, 10000);
 	
@@ -337,6 +356,7 @@ int __init mako_hotplug_init(void)
 	pr_info("Mako Hotplug driver started.\n");
 	
 	/* init everything here */
+	core_boost[0] = true;
 	time_stamp = 0;
 	online_cpus = num_online_cpus();
 	default_first_level = DEFAULT_FIRST_LEVEL;

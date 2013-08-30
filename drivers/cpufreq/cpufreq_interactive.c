@@ -107,7 +107,7 @@ static int input_boost_freq;
 /*
  * Duration of the touch boost
  */
-#define DEFAULT_INPUT_BOOST_FREQ_DURATION 1000
+#define DEFAULT_INPUT_BOOST_FREQ_DURATION 2000
 static int input_boost_freq_duration;
 
 /*
@@ -297,7 +297,7 @@ static void cpufreq_interactive_timer(unsigned long data)
 				freq_boosted_time >= input_boost_freq_duration)
 			is_touching = false;
 		else if ((new_freq < input_boost_freq || 
-					pcpu->policy->cur < input_boost_freq) && !gpu_idle)
+				pcpu->policy->cur < input_boost_freq) && !gpu_idle)
 			new_freq = input_boost_freq;
 	}
     
