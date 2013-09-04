@@ -50,7 +50,6 @@ struct cpufreq_interactive_cpuinfo {
 	unsigned int target_freq;
 	unsigned int floor_freq;
 	u64 floor_validate_time;
-	u64 hispeed_validate_time;
 	int governor_enabled;
 	unsigned int prev_iowait_time;
 };
@@ -67,13 +66,6 @@ static cpumask_t down_cpumask;
 static spinlock_t down_cpumask_lock;
 static struct mutex set_speed_lock;
 
-/* Hi speed to bump to from lo speed when load burst (default max) */
-#define DEFAULT_HISPEED_FREQ 702000
-static u64 hispeed_freq;
-
-/* Bump the CPU to hispeed_freq if its load is >= 50% */
-#define HISPEED_FREQ_LOAD 40
-
 /* If the CPU load is >= 85% it goes to max frequency */
 #define DEFAULT_UP_THRESHOLD 85
 static unsigned long up_threshold;
@@ -89,13 +81,6 @@ static unsigned long min_sample_time;
  */
 #define DEFAULT_TIMER_RATE (35 * USEC_PER_MSEC)
 static unsigned long timer_rate;
-
-/*
- * Wait this long before raising speed above hispeed, by default a single
- * timer interval.
- */
-#define DEFAULT_ABOVE_HISPEED_DELAY DEFAULT_TIMER_RATE
-static unsigned long above_hispeed_delay_val;
 
 /*
  * The CPU will be boosted to this frequency when the screen is
@@ -125,6 +110,8 @@ static bool dynamic_scaling = true;
 unsigned int get_cur_max(unsigned int cpu); 
 
 bool get_core_boost(unsigned int cpu);
+
+bool interactive_selected = false;
 
 static int cpufreq_governor_interactive(struct cpufreq_policy *policy,
                                         unsigned int event);
@@ -273,9 +260,6 @@ static void cpufreq_interactive_timer(unsigned long data)
 
 	if (cpu_load >= up_threshold)
 		new_freq = max_freq;
-    
-	if (new_freq <= hispeed_freq)
-		pcpu->hispeed_validate_time = pcpu->timer_run_time;
     
 	if (cpufreq_frequency_table_target(pcpu->policy, pcpu->freq_table,
                                        new_freq, CPUFREQ_RELATION_H,
@@ -551,29 +535,6 @@ static void cpufreq_interactive_freq_down(struct work_struct *work)
 	}
 }
 
-static ssize_t show_hispeed_freq(struct kobject *kobj,
-                                 struct attribute *attr, char *buf)
-{
-	return sprintf(buf, "%llu\n", hispeed_freq);
-}
-
-static ssize_t store_hispeed_freq(struct kobject *kobj,
-                                  struct attribute *attr, const char *buf,
-                                  size_t count)
-{
-	int ret;
-	u64 val;
-    
-	ret = strict_strtoull(buf, 0, &val);
-	if (ret < 0)
-		return ret;
-	hispeed_freq = val;
-	return count;
-}
-
-static struct global_attr hispeed_freq_attr = __ATTR(hispeed_freq, 0644,
-                                                     show_hispeed_freq, store_hispeed_freq);
-
 static ssize_t show_up_threshold(struct kobject *kobj,
                                  struct attribute *attr, char *buf)
 {
@@ -617,28 +578,6 @@ static ssize_t store_min_sample_time(struct kobject *kobj,
 
 static struct global_attr min_sample_time_attr = __ATTR(min_sample_time, 0644,
                                                         show_min_sample_time, store_min_sample_time);
-
-static ssize_t show_above_hispeed_delay(struct kobject *kobj,
-                                        struct attribute *attr, char *buf)
-{
-	return sprintf(buf, "%lu\n", above_hispeed_delay_val);
-}
-
-static ssize_t store_above_hispeed_delay(struct kobject *kobj,
-                                         struct attribute *attr,
-                                         const char *buf, size_t count)
-{
-	int ret;
-	unsigned long val;
-    
-	ret = strict_strtoul(buf, 0, &val);
-	if (ret < 0)
-		return ret;
-	above_hispeed_delay_val = val;
-	return count;
-}
-
-define_one_global_rw(above_hispeed_delay);
 
 static ssize_t show_timer_rate(struct kobject *kobj,
                                struct attribute *attr, char *buf)
@@ -737,8 +676,6 @@ static struct global_attr dynamic_scaling_attr = __ATTR(dynamic_scaling, 0644,
                                                         show_dynamic_scaling, store_dynamic_scaling);
 
 static struct attribute *interactive_attributes[] = {
-	&hispeed_freq_attr.attr,
-	&above_hispeed_delay.attr,
 	&min_sample_time_attr.attr,
 	&timer_rate_attr.attr,
 	&input_boost_freq_attr.attr,
@@ -752,13 +689,6 @@ static struct attribute_group interactive_attr_group = {
 	.attrs = interactive_attributes,
 	.name = "interactive",
 };
-
-void scale_above_hispeed_delay(unsigned int new_above_hispeed_delay)
-{
-	if (dynamic_scaling &&
-		above_hispeed_delay_val != new_above_hispeed_delay)
-		above_hispeed_delay_val = new_above_hispeed_delay;
-}
 
 void scale_timer_rate(unsigned int new_timer_rate)
 {
@@ -793,11 +723,6 @@ bool get_dynamic_scaling()
 	return dynamic_scaling;
 }
 
-unsigned int get_hispeed_freq()
-{
-	return hispeed_freq;
-}
-
 static int cpufreq_governor_interactive(struct cpufreq_policy *policy,
                                         unsigned int event)
 {
@@ -822,8 +747,6 @@ static int cpufreq_governor_interactive(struct cpufreq_policy *policy,
                 pcpu->floor_freq = pcpu->target_freq;
                 pcpu->floor_validate_time =
 				pcpu->target_set_time;
-                pcpu->hispeed_validate_time =
-				pcpu->target_set_time;
                 pcpu->governor_enabled = 1;
                 pcpu->idle_exit_time = pcpu->target_set_time;
                 mod_timer_pinned(&pcpu->cpu_timer,
@@ -837,6 +760,8 @@ static int cpufreq_governor_interactive(struct cpufreq_policy *policy,
              */
             if (atomic_inc_return(&active_count) > 1)
                 return 0;
+                
+            interactive_selected = true;
             
             rc = sysfs_create_group(cpufreq_global_kobject,
                                     &interactive_attr_group);
@@ -864,6 +789,8 @@ static int cpufreq_governor_interactive(struct cpufreq_policy *policy,
             flush_work(&freq_scale_down_work);
             if (atomic_dec_return(&active_count) > 0)
                 return 0;
+                
+            interactive_selected = false;
             
             sysfs_remove_group(cpufreq_global_kobject,
                                &interactive_attr_group);
@@ -910,9 +837,7 @@ static int __init cpufreq_interactive_init(void)
     
 	up_threshold = DEFAULT_UP_THRESHOLD;
 	min_sample_time = DEFAULT_MIN_SAMPLE_TIME;
-	above_hispeed_delay_val = DEFAULT_ABOVE_HISPEED_DELAY;
 	timer_rate = DEFAULT_TIMER_RATE;
-	hispeed_freq = DEFAULT_HISPEED_FREQ;
 	input_boost_freq = DEFAULT_INPUT_BOOST_FREQ;
 	input_boost_freq_duration = DEFAULT_INPUT_BOOST_FREQ_DURATION;
     

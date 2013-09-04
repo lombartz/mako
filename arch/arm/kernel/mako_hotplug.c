@@ -215,7 +215,7 @@ static void __cpuinit decide_hotplug_func(struct work_struct *work)
 			old_gpu_idle = false;
 		}
 	}
-	else if (online_cpus != num_cpus)
+	else if (online_cpus != num_cpus && interactive_selected)
 	{
 		scaling(num_cpus);
 	}
@@ -263,14 +263,15 @@ static void __cpuinit mako_hotplug_early_suspend(struct early_suspend *handler)
 	/* cap max frequency to 702MHz by default */
 	msm_cpufreq_set_freq_limits(0, MSM_CPUFREQ_NO_LIMIT, 
 			suspend_frequency);
-	pr_info("Cpulimit: Early suspend - limit cpu%d max frequency to: %dMHz\n",
-			0, suspend_frequency/1000);
 }
 
 static void __cpuinit mako_hotplug_late_resume(struct early_suspend *handler)
 {  
 	struct cpufreq_policy policy;
 	unsigned int cpu;
+
+	/* restore max frequency */
+	msm_cpufreq_set_freq_limits(0, MSM_CPUFREQ_NO_LIMIT, MSM_CPUFREQ_NO_LIMIT);
 
 	/* 2 online cores and max freq when the screen goes online */
 	for (cpu = 0; cpu < 2; cpu++)
@@ -286,10 +287,6 @@ static void __cpuinit mako_hotplug_late_resume(struct early_suspend *handler)
 	
 	freq_boosted_time = ktime_to_ms(ktime_get());
 	is_touching = true;
-	
-	/* restore max frequency */
-	msm_cpufreq_set_freq_limits(0, MSM_CPUFREQ_NO_LIMIT, MSM_CPUFREQ_NO_LIMIT);
-	pr_info("Cpulimit: Late resume - restore cpu%d max frequency.\n", 0);
 	
 	pr_info("Late Resume starting Hotplug work...\n");
 	queue_delayed_work(wq, &decide_hotplug, HZ);
