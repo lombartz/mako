@@ -215,7 +215,7 @@ static void __cpuinit decide_hotplug_func(struct work_struct *work)
 			old_gpu_idle = false;
 		}
 	}
-	else if (online_cpus != num_cpus)
+	else if (online_cpus != num_cpus && interactive_selected)
 	{
 		scaling(num_cpus);
 	}
