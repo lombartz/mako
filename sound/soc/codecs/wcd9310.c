@@ -2826,6 +2826,7 @@ static int tabla_codec_enable_dec(struct snd_soc_dapm_widget *w,
 				  snd_soc_read(codec,
 				  tx_digital_gain_reg[w->shift + offset])
 				  );
+
 		break;
 
 	case SND_SOC_DAPM_PRE_PMD:
@@ -3843,7 +3844,6 @@ static int tabla_readable(struct snd_soc_codec *ssc, unsigned int reg)
 
 	return tabla_reg_readable[reg];
 }
-
 static bool tabla_is_digital_gain_register(unsigned int reg)
 {
 	bool rtn = false;
@@ -8453,7 +8453,6 @@ static int tabla_codec_probe(struct snd_soc_codec *codec)
 	control = codec->control_data;
 
 	tabla = kzalloc(sizeof(struct tabla_priv), GFP_KERNEL);
-
 	if (!tabla) {
 		dev_err(codec->dev, "Failed to allocate private data\n");
 		return -ENOMEM;
