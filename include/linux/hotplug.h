@@ -40,4 +40,6 @@ extern unsigned long time_stamp;
 
 extern unsigned int report_load_at_max_freq(int cpu);
 
+extern bool interactive_selected;
+
 #endif

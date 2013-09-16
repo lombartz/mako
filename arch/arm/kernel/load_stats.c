@@ -101,19 +101,18 @@ static int update_average_load(unsigned int cpu)
 	struct cpu_load_data *pcpu = &per_cpu(cpuload, cpu);
 	cputime64_t cur_wall_time, cur_idle_time, cur_iowait_time;
 	unsigned int idle_time, wall_time, iowait_time;
-	unsigned int cur_load, cur_max, load_at_max_freq;
+	unsigned int cur_load, load_at_max_freq;
+	unsigned int cur_max;
 
 	cur_max = get_cur_max(cpu);
 	cpufreq_get_policy(&cpu_policy, cpu);
-	
-	/* if max freq is changed by the user this load calculator
-	   needs to adjust itself otherwise its going to be all wrong */
-	/* also checking for throttling */
-		
-	if (cur_max >= cpu_policy.max)
-		pcpu->policy_max = cpu_policy.max;
-	else
-		pcpu->policy_max = cur_max;
+
+	/* 
+	 * if max freq is changed by the user this load calculator
+	 * needs to adjust itself otherwise its going to be all wrong
+	 * This will also calculate correctly if the device is thermal throttled
+     */
+	pcpu->policy_max = cur_max >= cpu_policy.max ? cpu_policy.max : cur_max;
 
 	cur_idle_time = get_cpu_idle_time(cpu, &cur_wall_time);
 	cur_iowait_time = get_cpu_iowait_time(cpu, &cur_wall_time);
@@ -137,7 +136,7 @@ static int update_average_load(unsigned int cpu)
 
 	/* Calculate the scaled load across CPU */
 	load_at_max_freq = (cur_load * cpu_policy.cur) / pcpu->policy_max;
-	
+
 	/* This is the first sample in this window*/
 	pcpu->avg_load_maxfreq = pcpu->prev_avg_load_maxfreq + load_at_max_freq;
 	pcpu->avg_load_maxfreq /= 2;
