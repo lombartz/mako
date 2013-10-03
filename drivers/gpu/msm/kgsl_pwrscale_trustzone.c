@@ -227,10 +227,6 @@ static void __cpuinit tz_idle(struct kgsl_device *device, struct kgsl_pwrscale *
 
 	if (time_is_after_jiffies(window_time + msecs_to_jiffies(sample_time_ms)))
 		return;
-		
-	/*pr_info("GPU current load:\t%ld\n", busy_time_ms);
-	pr_info("GPU total time load:\t%ld\n", total_time_ms);
-	pr_info("GPU frequency:\t%d\n", pwr->pwrlevels[pwr->active_pwrlevel].gpu_freq);*/
 
 	gpu_stats.total_time_ms = jiffies_to_msecs((long)jiffies - (long)window_time);
 
@@ -253,6 +249,16 @@ static void __cpuinit tz_idle(struct kgsl_device *device, struct kgsl_pwrscale *
 	 * notice a few frame drops while this algorithm didn't scale past 128MHz
 	 * on simple operations. This is fixed with up_threshold being scaled
 	 */
+	
+	/*pr_info("---------------------------------");
+	if(gpu_idle){pr_info("GPU IDLE");}
+	else{pr_info("GPU BUSY");}
+	pr_info("GPU frequency:\t%d\n", pwr->pwrlevels[pwr->active_pwrlevel].gpu_freq);
+	pr_info("Cur Load:\t\t%ld\n", gpu_stats.busy_time_ms * 100);
+	pr_info("Up Threshold:\t%ld\n", gpu_stats.total_time_ms * gpu_stats.threshold);
+	pr_info("Down Threshold:\t%ld\n", gpu_stats.total_time_ms * down_threshold);*/
+	
+	
 	if (pwr->active_pwrlevel > 1)
 		gpu_stats.threshold = (up_threshold / pwr->active_pwrlevel) + up_differential;
 	else
