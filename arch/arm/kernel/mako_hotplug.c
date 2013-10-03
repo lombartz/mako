@@ -187,7 +187,7 @@ static void __cpuinit decide_hotplug_func(struct work_struct *work)
 	pr_info("Dw count:\t%d\n",third_counter);*/
 	
 
-/*	for_each_possible_cpu(cpu_debug)
+	/*for_each_possible_cpu(cpu_debug)
     {
     	if (cpu_online(cpu_debug))
     	{
@@ -233,26 +233,16 @@ static void __cpuinit mako_hotplug_early_suspend(struct early_suspend *handler)
 }
 
 static void __cpuinit mako_hotplug_late_resume(struct early_suspend *handler)
-{  
-	struct cpufreq_policy policy;
-	unsigned int cpu;
-
+{
 	/* restore max frequency */
 	msm_cpufreq_set_freq_limits(0, MSM_CPUFREQ_NO_LIMIT, MSM_CPUFREQ_NO_LIMIT);
 
-	/* 2 online cores and max freq when the screen goes online */
-	for (cpu = 0; cpu < 2; cpu++)
-	{
-		if (!cpu_online(cpu))
-			cpu_up(cpu);
-			
-		core_boost[cpu] = true;
-		cpufreq_get_policy(&policy, cpu);
-		__cpufreq_driver_target(&policy, 1026000, CPUFREQ_RELATION_H);
-	}
-	
-	freq_boosted_time = ktime_to_ms(ktime_get());
+	/* touchboost */
+
+	freq_boosted_time = time_stamp = ktime_to_ms(ktime_get());
 	is_touching = true;
+	
+	touchboost_func();
 	
 	pr_info("Late Resume starting Hotplug work...\n");
 	queue_delayed_work(wq, &decide_hotplug, HZ);
