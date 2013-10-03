@@ -83,6 +83,38 @@ static void __cpuinit offline_core(unsigned int cpu)
 	return;
 }
 
+unsigned int scale_first_level(void)
+{
+	if (!dynamic_scaling)
+		return default_first_level;
+		
+	if (gpu_idle)
+	{
+		if (default_first_level + 20 <= 90)
+			return default_first_level + 20;
+		else
+			return 90;
+	}
+	else
+		return default_first_level;
+}
+
+unsigned int scale_third_level(void)
+{
+	if (!dynamic_scaling)
+		return default_third_level;
+		
+	if (gpu_idle)
+	{
+		if (default_third_level + 20 <= 60)
+			return default_third_level + 20;
+		else
+			return 60;
+	}
+	else
+		return default_third_level;
+}
+
 void __cpuinit touchboost_func(void)
 {	
 	unsigned int i, core, cpus_num, boost_freq;
@@ -143,7 +175,7 @@ static void __cpuinit decide_hotplug_func(struct work_struct *work)
 
 	av_load = av_load / online_cpus;
 	
-	if (av_load >= default_first_level)
+	if (av_load >= scale_first_level())
 	{
 		if (first_counter < DEFAULT_COUNTER)
 			first_counter += 2;
@@ -154,7 +186,7 @@ static void __cpuinit decide_hotplug_func(struct work_struct *work)
 		if (first_counter >= DEFAULT_COUNTER)
 			online_core(online_cpus);	
 	}
-	else if (av_load <= default_third_level)
+	else if (av_load <= scale_third_level())
 	{
 		if (third_counter < DEFAULT_COUNTER)
 			third_counter += 2;
@@ -197,6 +229,8 @@ static void __cpuinit decide_hotplug_func(struct work_struct *work)
     	else
     		pr_info("cpu%d:\toff",cpu_debug);
     }
+    pr_info("First level: %d", scale_first_level());
+    pr_info("Third level: %d", scale_third_level());
     pr_info("-----------------------------------------");*/
 
 	

@@ -119,7 +119,7 @@ static int input_boost_freq_duration;
  * dynamic tunables scaling flag linked to the
  * hotplug driver
  */
-static bool dynamic_scaling = true;
+bool dynamic_scaling = true;
 
 /*
  * Helper to get the maximum set frequency which takes into consideration if the
