@@ -32,6 +32,8 @@
 #define DEFAULT_COUNTER 10
 #define BOOST_THRESHOLD 5000
 
+//#define DEBUG
+
 static struct workqueue_struct *wq;
 static struct delayed_work decide_hotplug;
 
@@ -149,10 +151,12 @@ static void __cpuinit decide_hotplug_func(struct work_struct *work)
 	unsigned int cpu, lowest_cpu = 0;
 	unsigned int load, av_load = 0, lowest_cpu_load = 100;
 	unsigned short online_cpus;
-	//short load_array[4] = {};
-	
-    //int cpu_debug = 0;
-    //struct cpufreq_policy policy;
+
+#ifdef DEBUG
+	short load_array[4] = {};
+    int cpu_debug = 0;
+    struct cpufreq_policy policy;
+#endif
 
 	now = ktime_to_ms(ktime_get());
 	online_cpus = num_online_cpus();
@@ -160,7 +164,10 @@ static void __cpuinit decide_hotplug_func(struct work_struct *work)
 	for_each_online_cpu(cpu) 
 	{
 		load = report_load_at_max_freq(cpu);
-		//load_array[cpu] = load;
+		
+#ifdef DEBUG
+		load_array[cpu] = load;
+#endif		
 		
 		if (load < lowest_cpu_load && cpu &&
 				!(core_boost[cpu] && 
@@ -206,7 +213,8 @@ static void __cpuinit decide_hotplug_func(struct work_struct *work)
 			third_counter--; 
 	}
 	
-/*	cpu = 0;
+#ifdef DEBUG
+	cpu = 0;
 	pr_info("----HOTPLUG DEBUG INFO----\n");
 	pr_info("Cores on:\t%d", num_online_cpus());
 	pr_info("Core0:\t%d", load_array[0]);
@@ -216,9 +224,9 @@ static void __cpuinit decide_hotplug_func(struct work_struct *work)
 	pr_info("Av Load:\t%d", av_load);
 	pr_info("-------------------------");
 	pr_info("Up count:\t%d\n",first_counter);
-	pr_info("Dw count:\t%d\n",third_counter);*/
+	pr_info("Dw count:\t%d\n",third_counter);
 	
-	/*if (gpu_idle)
+	if (gpu_idle)
 		pr_info("Gpu Idle: true");
 	else
 		pr_info("Gpu Idle: false");
@@ -239,7 +247,8 @@ static void __cpuinit decide_hotplug_func(struct work_struct *work)
     }
     pr_info("First level: %d", scale_first_level());
     pr_info("Third level: %d", scale_third_level());
-    pr_info("-----------------------------------------");*/
+    pr_info("-----------------------------------------");
+#endif
 
 	
 	queue_delayed_work(wq, &decide_hotplug, msecs_to_jiffies(80));
