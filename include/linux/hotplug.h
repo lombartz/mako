@@ -36,7 +36,7 @@ extern bool gpu_idle;
 extern bool dynamic_scaling;
 extern short idle_counter;
 extern bool is_touching;
-extern u64 boostpulse_endtime;
+extern u64 freq_boosted_time;
 extern unsigned long time_stamp;
 
 extern unsigned int report_load_at_max_freq(int cpu);

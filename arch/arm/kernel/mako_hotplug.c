@@ -44,8 +44,6 @@ static bool core_boost[4];
 static short first_counter = 0;
 static short third_counter = 0;
 
-unsigned int get_boostpulse_duration_val(void);
-
 static void __cpuinit online_core(unsigned short cpus_num)
 {
 	unsigned int cpu;
@@ -264,6 +262,7 @@ static void __cpuinit mako_hotplug_early_suspend(struct early_suspend *handler)
 			core_boost[cpu] = false;
 			cpu_down(cpu);
 		}
+		
 	}
 	
 	is_touching = false;
@@ -285,9 +284,9 @@ static void __cpuinit mako_hotplug_late_resume(struct early_suspend *handler)
 	is_touching = true;
     idle_counter = -10;
     gpu_idle = false;
-    
-    boostpulse_endtime = ktime_to_us(ktime_get()) + get_boostpulse_duration_val();
-	time_stamp = ktime_to_ms(ktime_get());
+
+	freq_boosted_time = time_stamp = ktime_to_ms(ktime_get());
+	is_touching = true;
 	
 	touchboost_func();
 	
