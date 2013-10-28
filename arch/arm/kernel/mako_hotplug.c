@@ -66,7 +66,7 @@ static void __cpuinit online_core(unsigned short cpus_num)
 		core_boost[cpu] = true;
 	
 	first_counter = 4;
-	third_counter = 0;
+	third_counter = -DEFAULT_COUNTER;
 	
 	return;
 }
@@ -80,7 +80,7 @@ static void __cpuinit offline_core(unsigned int cpu)
 	cpu_down(cpu);
 	
 	first_counter = 0;
-	third_counter = 4;
+	third_counter = 0;
 	
 	return;
 }
@@ -196,7 +196,7 @@ static void __cpuinit decide_hotplug_func(struct work_struct *work)
 	else if (av_load <= scale_third_level())
 	{
 		if (third_counter < DEFAULT_COUNTER)
-			third_counter += 2;
+			third_counter += 1;
 		
 		if (first_counter > 0)
 			first_counter -= 2;
@@ -251,7 +251,7 @@ static void __cpuinit decide_hotplug_func(struct work_struct *work)
 #endif
 
 	
-	queue_delayed_work(wq, &decide_hotplug, msecs_to_jiffies(80));
+	queue_delayed_work(wq, &decide_hotplug, msecs_to_jiffies(50));
 }
 
 static void __cpuinit mako_hotplug_early_suspend(struct early_suspend *handler)
