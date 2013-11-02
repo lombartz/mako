@@ -106,7 +106,7 @@ static unsigned int timer_rate;
  * The CPU will be boosted to this frequency when the screen is
  * touched. input_boost needs to be enabled.
  */
-#define DEFAULT_INPUT_BOOST_FREQ 1026000
+#define DEFAULT_INPUT_BOOST_FREQ 1134000
 static int input_boost_freq;
 
 /*
@@ -193,6 +193,8 @@ static inline cputime64_t get_cpu_idle_time(unsigned int cpu,
   	return idle_time;
 }
 
+//#define DEBUG
+
 static void cpufreq_interactive_timer(unsigned long data)
 {
 	unsigned int delta_idle;
@@ -209,16 +211,10 @@ static void cpufreq_interactive_timer(unsigned long data)
 	unsigned long flags;
 	unsigned int cur_max;
 	unsigned int max_freq;
-    
-    /*static unsigned long time_stamp;
-    if (time_stamp < ktime_to_ms(ktime_get()) - 500)
-    {
-    	pr_info("up_threshold, timer_rate, min_sample_time");
-    	pr_info("%d\t%d\t%d", scale_up_threshold(),scale_timer_rate(),
-    		scale_min_sample_time());
-    	pr_info("-----------------------------------------");
-    	time_stamp = ktime_to_ms(ktime_get());
-    }*/
+	unsigned int up_threshold;
+#ifdef DEBUG
+	static unsigned long debug_time_stamp;
+#endif
     
 	smp_rmb();
     
@@ -277,12 +273,33 @@ static void cpufreq_interactive_timer(unsigned long data)
 	cur_max = get_cur_max(pcpu->policy->cpu);
 
 	max_freq = cur_max >= pcpu->policy->max ? pcpu->policy->max : cur_max;
-
-	/* Lets divide by up_threshold so that the device uses more freqs */
-	new_freq = max_freq * cpu_load / scale_up_threshold();
-
-	if (cpu_load >= scale_up_threshold())
+	
+	up_threshold = scale_up_threshold();
+	
+	/* normal frequency */
+	if (cpu_load >= up_threshold)
 		new_freq = max_freq;
+	else
+		new_freq = max_freq * cpu_load / up_threshold;
+	
+	/* check touchboost state and cpu core*/
+	if (is_touching && get_core_boost(pcpu->policy->cpu))
+	{
+		if (ktime_to_ms(ktime_get()) - 
+				freq_boosted_time >= input_boost_freq_duration)
+			is_touching = false;
+		
+		/* check if touchboost is necessary */
+		else if (!gpu_idle && new_freq < input_boost_freq)
+		{
+			/* the up_threshold is set to 50% */
+			new_freq = max_freq * cpu_load / 50;
+			
+			/* do not go higher than input_boost_freq */
+			if (new_freq > input_boost_freq)
+				new_freq = input_boost_freq;
+		}
+	}
     
 	if (cpufreq_frequency_table_target(pcpu->policy, pcpu->freq_table,
                                        new_freq, CPUFREQ_RELATION_H,
@@ -293,20 +310,20 @@ static void cpufreq_interactive_timer(unsigned long data)
 	}
     
 	new_freq = pcpu->freq_table[index].frequency;
-    
-	/* 
-	 * we want cpu0 to be the only core blocked for freq changes while
-     	 * we are touching the screen for UI interaction 
-	 */
-	if (is_touching && get_core_boost(pcpu->policy->cpu))
-	{
-		if (ktime_to_ms(ktime_get()) - 
-				freq_boosted_time >= input_boost_freq_duration)
-			is_touching = false;
-		else if ((new_freq < input_boost_freq || 
-				pcpu->policy->cur < input_boost_freq) && !gpu_idle)
-			new_freq = input_boost_freq;
-	}
+	
+#ifdef DEBUG
+    if (pcpu->policy->cpu == 0 && 
+    		debug_time_stamp < ktime_to_ms(ktime_get()) - 100)
+    {
+    	pr_info("new_freq, cpu_load");
+    	pr_info("%d\t%d", new_freq, cpu_load);
+    	pr_info("up_threshold, timer_rate, min_sample_time");
+    	pr_info("%d\t%d\t%d", up_threshold, scale_timer_rate(),
+    		scale_min_sample_time());
+    	pr_info("-----------------------------------------");
+    	debug_time_stamp = ktime_to_ms(ktime_get());
+    }
+#endif
     
 	/*
 	 * Do not scale below floor_freq unless we have been at or above the
@@ -558,28 +575,6 @@ static void cpufreq_interactive_freq_down(struct work_struct *work)
 	}
 }
 
-static ssize_t show_up_threshold(struct kobject *kobj,
-                                 struct attribute *attr, char *buf)
-{
-	return sprintf(buf, "%d\n", up_threshold);
-}
-
-static ssize_t store_up_threshold(struct kobject *kobj,
-                                  struct attribute *attr, const char *buf, size_t count)
-{
-	int ret;
-	unsigned long val;
-    
-	ret = strict_strtoul(buf, 0, &val);
-	if (ret < 0)
-		return ret;
-	up_threshold = val;
-	return count;
-}
-
-static struct global_attr up_threshold_attr = __ATTR(up_threshold, 0644,
-                                                     show_up_threshold, store_up_threshold);
-
 static ssize_t show_min_sample_time(struct kobject *kobj,
                                     struct attribute *attr, char *buf)
 {
@@ -704,7 +699,6 @@ static struct attribute *interactive_attributes[] = {
 	&input_boost_freq_attr.attr,
 	&input_boost_freq_duration_attr.attr,
 	&dynamic_scaling_attr.attr,
-	&up_threshold_attr.attr,
 	NULL,
 };
 
