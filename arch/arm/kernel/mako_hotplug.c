@@ -155,6 +155,7 @@ static void __cpuinit decide_hotplug_func(struct work_struct *work)
 #ifdef DEBUG
 	short load_array[4] = {};
     int cpu_debug = 0;
+	static unsigned long debug_time_stamp;
     struct cpufreq_policy policy;
 #endif
 
@@ -214,40 +215,44 @@ static void __cpuinit decide_hotplug_func(struct work_struct *work)
 	}
 	
 #ifdef DEBUG
-	cpu = 0;
-	pr_info("----HOTPLUG DEBUG INFO----\n");
-	pr_info("Cores on:\t%d", num_online_cpus());
-	pr_info("Core0:\t%d", load_array[0]);
-	pr_info("Core1:\t%d", load_array[1]);
-	pr_info("Core2:\t%d", load_array[2]);
-	pr_info("Core3:\t%d", load_array[3]);
-	pr_info("Av Load:\t%d", av_load);
-	pr_info("-------------------------");
-	pr_info("Up count:\t%d\n",first_counter);
-	pr_info("Dw count:\t%d\n",third_counter);
-	
-	if (gpu_idle)
-		pr_info("Gpu Idle: true");
-	else
-		pr_info("Gpu Idle: false");
-	if (is_touching)
-		pr_info("Touch: true");
-	else
-		pr_info("Touch: false");
-		
-	for_each_possible_cpu(cpu_debug)
+    if (debug_time_stamp < ktime_to_ms(ktime_get()) - 200)
     {
-    	if (cpu_online(cpu_debug))
-    	{
-    		cpufreq_get_policy(&policy, cpu_debug);
-    		pr_info("cpu%d:\t%d MHz",cpu_debug,policy.cur/1000);
-    	}
-    	else
-    		pr_info("cpu%d:\toff",cpu_debug);
-    }
-    pr_info("First level: %d", scale_first_level());
-    pr_info("Third level: %d", scale_third_level());
-    pr_info("-----------------------------------------");
+		cpu = 0;
+		pr_info("----HOTPLUG DEBUG INFO----\n");
+		pr_info("Cores on:\t%d", num_online_cpus());
+		pr_info("Core0:\t%d", load_array[0]);
+		pr_info("Core1:\t%d", load_array[1]);
+		pr_info("Core2:\t%d", load_array[2]);
+		pr_info("Core3:\t%d", load_array[3]);
+		pr_info("Av Load:\t%d", av_load);
+		pr_info("-------------------------");
+		pr_info("Up count:\t%d\n",first_counter);
+		pr_info("Dw count:\t%d\n",third_counter);
+	
+		if (gpu_idle)
+			pr_info("Gpu Idle: true");
+		else
+			pr_info("Gpu Idle: false");
+		if (is_touching)
+			pr_info("Touch: true");
+		else
+			pr_info("Touch: false");
+		
+		for_each_possible_cpu(cpu_debug)
+		{
+			if (cpu_online(cpu_debug))
+			{
+				cpufreq_get_policy(&policy, cpu_debug);
+				pr_info("cpu%d:\t%d MHz",cpu_debug,policy.cur/1000);
+			}
+			else
+				pr_info("cpu%d:\toff",cpu_debug);
+		}
+		pr_info("First level: %d", scale_first_level());
+		pr_info("Third level: %d", scale_third_level());
+		pr_info("-----------------------------------------");
+		debug_time_stamp = now;
+	}
 #endif
 
 	
