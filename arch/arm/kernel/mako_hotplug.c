@@ -29,10 +29,10 @@
 #define DEFAULT_THIRD_LEVEL 30
 #define DEFAULT_SUSPEND_FREQ 702000
 #define DEFAULT_CORES_ON_TOUCH 2
-#define DEFAULT_COUNTER 10
+#define DEFAULT_COUNTER 20
 #define BOOST_THRESHOLD 5000
 
-//#define DEBUG
+#define DEBUG
 
 static struct workqueue_struct *wq;
 static struct delayed_work decide_hotplug;
@@ -65,7 +65,7 @@ static void __cpuinit online_core(unsigned short cpus_num)
 	if (cpus_num < cores_on_touch)
 		core_boost[cpu] = true;
 	
-	first_counter = 4;
+	first_counter = 0;
 	third_counter = -DEFAULT_COUNTER;
 	
 	return;
@@ -151,6 +151,7 @@ static void __cpuinit decide_hotplug_func(struct work_struct *work)
 	unsigned int cpu, lowest_cpu = 0;
 	unsigned int load, av_load = 0, lowest_cpu_load = 100;
 	unsigned short online_cpus;
+	unsigned short up_val, down_val;
 
 #ifdef DEBUG
 	short load_array[4] = {};
@@ -170,8 +171,7 @@ static void __cpuinit decide_hotplug_func(struct work_struct *work)
 		load_array[cpu] = load;
 #endif		
 		
-		if (load < lowest_cpu_load && cpu &&
-				!(core_boost[cpu] && 
+		if (load < lowest_cpu_load && cpu && !(core_boost[cpu] && 
 				now - time_stamp < BOOST_THRESHOLD))
 		{
 			lowest_cpu = cpu;
@@ -183,13 +183,24 @@ static void __cpuinit decide_hotplug_func(struct work_struct *work)
 
 	av_load = av_load / online_cpus;
 	
+	if (gpu_idle)
+	{
+		up_val = 3;
+		down_val = 3;
+	}
+	else
+	{
+		up_val = 5;
+		down_val = 2;		
+	}
+	
 	if (av_load >= scale_first_level())
 	{
 		if (first_counter < DEFAULT_COUNTER)
-			first_counter += 2;
+			first_counter += up_val;
 		
 		if (third_counter > 0)
-			third_counter -= 2;
+			third_counter -= up_val;
 			
 		if (first_counter >= DEFAULT_COUNTER)
 			online_core(online_cpus);	
@@ -197,10 +208,10 @@ static void __cpuinit decide_hotplug_func(struct work_struct *work)
 	else if (av_load <= scale_third_level())
 	{
 		if (third_counter < DEFAULT_COUNTER)
-			third_counter += 1;
+			third_counter += down_val;
 		
 		if (first_counter > 0)
-			first_counter -= 2;
+			first_counter -= down_val;
 			
 		if (third_counter >= DEFAULT_COUNTER)
 			offline_core(lowest_cpu);	
@@ -208,10 +219,10 @@ static void __cpuinit decide_hotplug_func(struct work_struct *work)
 	else
 	{
 		if (first_counter > 0)
-			first_counter--;
+			first_counter -= down_val;
 		
 		if (third_counter > 0)
-			third_counter--; 
+			third_counter -= down_val; 
 	}
 	
 #ifdef DEBUG
