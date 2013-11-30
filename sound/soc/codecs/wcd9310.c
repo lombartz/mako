@@ -3912,74 +3912,13 @@ static int tabla_volatile(struct snd_soc_codec *ssc, unsigned int reg)
 
 	return 0;
 }
-
-int reg_access(unsigned int reg)
-{
-	int ret = 1;
-
-	switch (reg) {
-		case TABLA_A_RX_HPH_L_GAIN:
-		case TABLA_A_RX_HPH_R_GAIN:
-		case TABLA_A_RX_HPH_L_STATUS:
-		case TABLA_A_RX_HPH_R_STATUS:
-		case TABLA_A_CDC_RX1_VOL_CTL_B2_CTL:
-		case TABLA_A_CDC_RX2_VOL_CTL_B2_CTL:
-		case TABLA_A_CDC_RX3_VOL_CTL_B2_CTL:
-		case TABLA_A_CDC_RX4_VOL_CTL_B2_CTL:
-		case TABLA_A_CDC_RX5_VOL_CTL_B2_CTL:
-		case TABLA_A_CDC_RX6_VOL_CTL_B2_CTL:
-		case TABLA_A_CDC_RX7_VOL_CTL_B2_CTL:
-		case TABLA_A_CDC_TX1_VOL_CTL_GAIN:
-		case TABLA_A_CDC_TX2_VOL_CTL_GAIN:
-		case TABLA_A_CDC_TX3_VOL_CTL_GAIN:
-		case TABLA_A_CDC_TX4_VOL_CTL_GAIN:
-		case TABLA_A_CDC_TX5_VOL_CTL_GAIN:
-		case TABLA_A_CDC_TX6_VOL_CTL_GAIN:
-		case TABLA_A_CDC_TX7_VOL_CTL_GAIN:
-		case TABLA_A_CDC_TX8_VOL_CTL_GAIN:
-		case TABLA_A_CDC_TX9_VOL_CTL_GAIN:
-		case TABLA_A_CDC_TX10_VOL_CTL_GAIN:
-			if (soundcontrol.lock)
-				ret = 0;
-			break;
-		default:
-			break;
-		}
-
-	return ret;
-}
-
 #define TABLA_FORMATS (SNDRV_PCM_FMTBIT_S16_LE)
-#ifndef CONFIG_SOUND_CONTROL_HAX_GPL
-static
-#endif
-int tabla_write(struct snd_soc_codec *codec, unsigned int reg,
-	unsigned int value)
-{
-	int ret;
-	int val;
 
-	BUG_ON(reg > TABLA_MAX_REGISTER);
-
-	if (!tabla_volatile(codec, reg)) {
-		ret = snd_soc_cache_write(codec, reg, value);
-		if (ret != 0)
-			dev_err(codec->dev, "Cache write to %x failed: %d\n",
-				reg, ret);
-	}
-
-	if (!reg_access(reg))
-		val = wcd9xxx_reg_read(codec->control_data, reg);
-	else
-		val = value;
-
-	return wcd9xxx_reg_write(codec->control_data, reg, val);
-}
-#ifdef CONFIG_SOUND_CONTROL_HAX_GPL
-EXPORT_SYMBOL(tabla_write);
+#ifdef CONFIG_SOUND_CONTROL_HAX_3_GPL
+extern int reg_access(unsigned int reg);
 #endif
 
-#ifndef CONFIG_SOUND_CONTROL_HAX_GPL
+#ifndef CONFIG_SOUND_CONTROL_HAX_3_GPL
 static
 #endif
 unsigned int tabla_read(struct snd_soc_codec *codec,
@@ -4003,8 +3942,41 @@ unsigned int tabla_read(struct snd_soc_codec *codec,
 	val = wcd9xxx_reg_read(codec->control_data, reg);
 	return val;
 }
-#ifdef CONFIG_SOUND_CONTROL_HAX_GPL
+#ifdef CONFIG_SOUND_CONTROL_HAX_3_GPL
 EXPORT_SYMBOL(tabla_read);
+#endif
+
+#ifndef CONFIG_SOUND_CONTROL_HAX_3_GPL
+static
+#endif
+int tabla_write(struct snd_soc_codec *codec, unsigned int reg,
+	unsigned int value)
+{
+	int ret;
+#ifdef CONFIG_SOUND_CONTROL_HAX_3_GPL
+	int val;
+#endif
+
+	BUG_ON(reg > TABLA_MAX_REGISTER);
+
+	if (!tabla_volatile(codec, reg)) {
+		ret = snd_soc_cache_write(codec, reg, value);
+		if (ret != 0)
+			dev_err(codec->dev, "Cache write to %x failed: %d\n",
+				reg, ret);
+	}
+#ifdef CONFIG_SOUND_CONTROL_HAX_3_GPL
+	if (!reg_access(reg))
+		val = wcd9xxx_reg_read_safe(codec->control_data, reg);
+	else
+		val = value;
+	return wcd9xxx_reg_write(codec->control_data, reg, val);
+#else
+	return wcd9xxx_reg_write(codec->control_data, reg, value);
+#endif
+}
+#ifdef CONFIG_SOUND_CONTROL_HAX_3_GPL
+EXPORT_SYMBOL(tabla_write);
 #endif
 
 static s16 tabla_get_current_v_ins(struct tabla_priv *tabla, bool hu)
@@ -8493,7 +8465,7 @@ void update_mic_gain(int gain_boost)
 }
 #endif
 
-#ifdef CONFIG_SOUND_CONTROL_HAX_GPL
+#ifdef CONFIG_SOUND_CONTROL_HAX_3_GPL
 struct snd_kcontrol_new *gpl_faux_snd_controls_ptr =
 		(struct snd_kcontrol_new *)tabla_snd_controls;
 struct snd_soc_codec *fauxsound_codec_ptr;
@@ -8511,7 +8483,7 @@ static int tabla_codec_probe(struct snd_soc_codec *codec)
 
 	soundcontrol.sound_control_codec = codec;
 
-#ifdef CONFIG_SOUND_CONTROL_HAX_GPL
+#ifdef CONFIG_SOUND_CONTROL_HAX_3_GPL
 	pr_info("tabla codec probe...\n");
 	fauxsound_codec_ptr = codec;
 #endif
