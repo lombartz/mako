@@ -1024,6 +1024,167 @@ static ssize_t store_boostpulse_duration(
 
 define_one_global_rw(boostpulse_duration);
 
+/*
+ * hotplug sysfs get/set entries start
+ */
+
+static ssize_t show_pm_boost_up_threshold(
+		struct kobject *kobj, struct attribute *attr, char *buf){
+	return show_array(0, 0, buf); }
+
+static ssize_t show_pm_boost_down_threshold(
+		struct kobject *kobj, struct attribute *attr, char *buf){
+	return show_array(1, 0, buf); }
+
+static ssize_t show_pm_boost_max_up_counter(
+		struct kobject *kobj, struct attribute *attr, char *buf){
+	return show_array(2, 0, buf); }
+
+static ssize_t show_pm_boost_max_down_counter(
+		struct kobject *kobj, struct attribute *attr, char *buf){
+	return show_array(3, 0, buf); }
+
+static ssize_t show_pm_boost_sample_time_ms(
+		struct kobject *kobj, struct attribute *attr, char *buf){
+	return show_value(4, 0, buf); }
+
+static ssize_t show_pm_busy_up_threshold(
+		struct kobject *kobj, struct attribute *attr, char *buf){
+	return show_array(0, 1, buf); }
+
+static ssize_t show_pm_busy_down_threshold(
+		struct kobject *kobj, struct attribute *attr, char *buf){
+	return show_array(1, 1, buf); }
+
+static ssize_t show_pm_busy_max_up_counter(
+		struct kobject *kobj, struct attribute *attr, char *buf){
+	return show_array(2, 1, buf); }
+
+static ssize_t show_pm_busy_max_down_counter(
+		struct kobject *kobj, struct attribute *attr, char *buf){
+	return show_array(3, 1, buf); }
+
+static ssize_t show_pm_busy_sample_time_ms(
+		struct kobject *kobj, struct attribute *attr, char *buf){
+	return show_value(4, 1, buf); }
+
+static ssize_t show_pm_idle_up_threshold(
+		struct kobject *kobj, struct attribute *attr, char *buf){
+	return show_array(0, 2, buf); }
+
+static ssize_t show_pm_idle_down_threshold(
+		struct kobject *kobj, struct attribute *attr, char *buf){
+	return show_array(1, 2, buf); }
+
+static ssize_t show_pm_idle_max_up_counter(
+		struct kobject *kobj, struct attribute *attr, char *buf){
+	return show_array(2, 2, buf); }
+
+static ssize_t show_pm_idle_max_down_counter(
+		struct kobject *kobj, struct attribute *attr, char *buf){
+	return show_array(3, 2, buf); }
+
+static ssize_t show_pm_idle_sample_time_ms(
+		struct kobject *kobj, struct attribute *attr, char *buf){
+	return show_value(4, 2, buf); }
+
+/*##############################################################*/
+
+static ssize_t store_pm_boost_up_threshold(
+		struct kobject *kobj, struct attribute *attr, 
+			const char *buf, size_t count){
+	return (store_array(0, 0, buf) ? count : -1); }
+
+static ssize_t store_pm_boost_down_threshold(
+		struct kobject *kobj, struct attribute *attr, 
+			const char *buf, size_t count){
+	return (store_array(1, 0, buf) ? count : -1); }
+
+static ssize_t store_pm_boost_max_up_counter(
+		struct kobject *kobj, struct attribute *attr, 
+			const char *buf, size_t count){
+	return (store_array(2, 0, buf) ? count : -1); }
+
+static ssize_t store_pm_boost_max_down_counter(
+		struct kobject *kobj, struct attribute *attr, 
+			const char *buf, size_t count){
+	return (store_array(3, 0, buf) ? count : -1); }
+
+static ssize_t store_pm_boost_sample_time_ms(
+		struct kobject *kobj, struct attribute *attr, 
+			const char *buf, size_t count){
+	return (store_value(4, 0, buf) ? count : -1); }
+
+static ssize_t store_pm_busy_up_threshold(
+		struct kobject *kobj, struct attribute *attr, 
+			const char *buf, size_t count){
+	return (store_array(0, 1, buf) ? count : -1); }
+
+static ssize_t store_pm_busy_down_threshold(
+		struct kobject *kobj, struct attribute *attr, 
+			const char *buf, size_t count){
+	return (store_array(1, 1, buf) ? count : -1); }
+
+static ssize_t store_pm_busy_max_up_counter(
+		struct kobject *kobj, struct attribute *attr, 
+			const char *buf, size_t count){
+	return (store_array(2, 1, buf) ? count : -1); }
+
+static ssize_t store_pm_busy_max_down_counter(
+		struct kobject *kobj, struct attribute *attr, 
+			const char *buf, size_t count){
+	return (store_array(3, 1, buf) ? count : -1); }
+
+static ssize_t store_pm_busy_sample_time_ms(
+		struct kobject *kobj, struct attribute *attr, 
+			const char *buf, size_t count){
+	return (store_value(4, 1, buf) ? count : -1); }
+
+static ssize_t store_pm_idle_up_threshold(
+		struct kobject *kobj, struct attribute *attr, 
+			const char *buf, size_t count){
+	return (store_array(0, 2, buf) ? count : -1); }
+
+static ssize_t store_pm_idle_down_threshold(
+		struct kobject *kobj, struct attribute *attr, 
+			const char *buf, size_t count){
+	return (store_array(1, 2, buf) ? count : -1); }
+
+static ssize_t store_pm_idle_max_up_counter(
+		struct kobject *kobj, struct attribute *attr, 
+			const char *buf, size_t count){
+	return (store_array(2, 2, buf) ? count : -1); }
+
+static ssize_t store_pm_idle_max_down_counter(
+		struct kobject *kobj, struct attribute *attr, 
+			const char *buf, size_t count){
+	return (store_array(3, 2, buf) ? count : -1); }
+
+static ssize_t store_pm_idle_sample_time_ms(
+		struct kobject *kobj, struct attribute *attr, 
+			const char *buf, size_t count){
+	return (store_value(4, 2, buf) ? count : -1); }
+
+define_one_global_rw(pm_boost_up_threshold);
+define_one_global_rw(pm_boost_down_threshold);
+define_one_global_rw(pm_boost_max_up_counter);
+define_one_global_rw(pm_boost_max_down_counter);
+define_one_global_rw(pm_boost_sample_time_ms);
+define_one_global_rw(pm_busy_up_threshold);
+define_one_global_rw(pm_busy_down_threshold);
+define_one_global_rw(pm_busy_max_up_counter);
+define_one_global_rw(pm_busy_max_down_counter);
+define_one_global_rw(pm_busy_sample_time_ms);
+define_one_global_rw(pm_idle_up_threshold);
+define_one_global_rw(pm_idle_down_threshold);
+define_one_global_rw(pm_idle_max_up_counter);
+define_one_global_rw(pm_idle_max_down_counter);
+define_one_global_rw(pm_idle_sample_time_ms);
+
+/*
+ * hotplug sysfs get/set entries end
+ */
+
 static struct attribute *interactive_attributes[] = {
 	&boost_target_loads_attr.attr,
 	&busy_target_loads_attr.attr,
@@ -1041,6 +1202,22 @@ static struct attribute *interactive_attributes[] = {
 	&idle_timer_rate_attr.attr,
 	&idle_timer_slack.attr,
 	&boostpulse_duration.attr,
+	//hotplug
+	&pm_boost_up_threshold.attr,
+	&pm_boost_down_threshold.attr,
+	&pm_boost_max_up_counter.attr,
+	&pm_boost_max_down_counter.attr,
+	&pm_boost_sample_time_ms.attr,
+	&pm_busy_up_threshold.attr,
+	&pm_busy_down_threshold.attr,
+	&pm_busy_max_up_counter.attr,
+	&pm_busy_max_down_counter.attr,
+	&pm_busy_sample_time_ms.attr,
+	&pm_idle_up_threshold.attr,
+	&pm_idle_down_threshold.attr,
+	&pm_idle_max_up_counter.attr,
+	&pm_idle_max_down_counter.attr,
+	&pm_idle_sample_time_ms.attr,	
 	NULL,
 };
 

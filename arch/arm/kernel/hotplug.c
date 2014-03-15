@@ -18,19 +18,18 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/init.h>
-#include <linux/device.h>
-#include <linux/miscdevice.h>
 #include <linux/cpu.h>
 #include <linux/workqueue.h>
 #include <linux/sched.h>
 #include <linux/platform_device.h>
 #include <linux/timer.h>
-#include <linux/earlysuspend.h>
 #include <linux/cpufreq.h>
 #include <linux/delay.h>
 #include <linux/hotplug.h>
-#include <mach/cpufreq.h>
-#include <linux/slab.h>
+#include <linux/input.h>
+#include <linux/jiffies.h>
+
+#include <linux/earlysuspend.h>
 
 #define HOTPLUG "hotplug"
 
@@ -46,10 +45,9 @@ static DEFINE_PER_CPU(struct cpu_load_data, cpuload);
 static u64 now;
 
 static struct workqueue_struct *wq;
-static struct workqueue_struct *pm_wq;
 static struct delayed_work decide_hotplug;
-static struct work_struct resume;
 static struct work_struct suspend;
+static struct work_struct resume;
 
 static unsigned int up_counter = 0;
 static unsigned int down_counter = 0;
@@ -62,8 +60,6 @@ static struct hotplug_values {
 	unsigned int max_up_counter[CPU_CORES];
 	unsigned int max_down_counter[CPU_CORES];
 	unsigned int sample_time_ms;
-	spinlock_t up_threshold_lock, down_threshold_lock,
-		max_up_counter_lock, max_down_counter_lock;
 } 
 boost_values = {
 	.up_threshold = {55, 60, 65, 100},
@@ -81,7 +77,7 @@ boost_values = {
 	.up_threshold = {80, 85, 90, 100},
 	.down_threshold = {0, 40, 50, 60},
 	.max_up_counter = {6, 10, 10, 0},
-	.max_down_counter = {0, 10, 6, 6},
+	.max_down_counter = {0, 50, 6, 6},
 	.sample_time_ms = 50
 };
 
@@ -238,23 +234,21 @@ static void __ref decide_hotplug_func(struct work_struct *work)
 	cpu = 0;
 	pr_info("------HOTPLUG DEBUG INFO------\n");
 	pr_info("Cores on:\t%d", online_cpus + 1);
-	pr_info("Core0:\t\t%d", load_array[0]);
-	pr_info("Core1:\t\t%d", load_array[1]);
-	pr_info("Core2:\t\t%d", load_array[2]);
-	pr_info("Core3:\t\t%d", load_array[3]);
-	pr_info("Av Load:\t\t%d", av_load);
+	pr_info("Core0:\t%d", load_array[0]);
+	pr_info("Core1:\t%d", load_array[1]);
+	pr_info("Core2:\t%d", load_array[2]);
+	pr_info("Core3:\t%d", load_array[3]);
+	pr_info("Av Load:\t%d", av_load);
 	pr_info("-------------------------------");
-	pr_info("Up count:\t%d\n",up_counter);
-	pr_info("Dw count:\t%d\n",down_counter);
+	pr_info("Up count:\t%u -> %u\n",up_counter,
+			values->max_up_counter[online_cpus]);
+	pr_info("Dw count:\t%u -> %u\n",down_counter,
+			values->max_down_counter[online_cpus]);
 
-	if (gpu_idle)
-		pr_info("Gpu Idle:\ttrue");
-	else
-		pr_info("Gpu Idle:\tfalse");
-	if (boostpulse_endtime > now)
-		pr_info("Touch:\t\ttrue");
-	else
-		pr_info("Touch:\t\tfalse");
+	pr_info("Gpu Idle:\t%s",(gpu_idle ? "true" : "false"));
+
+	pr_info("Touch:\t%s",(boostpulse_endtime > now ?
+						 "true" : "false"));
 	
 	for_each_possible_cpu(cpu_debug)
 	{
@@ -267,42 +261,31 @@ static void __ref decide_hotplug_func(struct work_struct *work)
 		else
 			pr_info("cpu%d:\t\toff",cpu_debug);
 	}
-	pr_info("up_threshold:\t%d", 
-		values->max_up_counter[online_cpus]);
-	pr_info("down_threshold:\t%d", 
-		values->max_down_counter[online_cpus]);
 	pr_info("-----------------------------------------");
-	kfree(load_array);
 #endif
 
 	queue_delayed_work(wq, &decide_hotplug, 
 			msecs_to_jiffies(values->sample_time_ms));
 }
 
-static void suspend_func(struct work_struct *work)
+static void hotplug_suspend(struct work_struct *work)
 {
 	int cpu;
 
-	/* cancel the hotplug work when the screen is off and flush the WQ */
-	flush_workqueue(wq);
-	cancel_delayed_work_sync(&decide_hotplug);
-
 	pr_info("Early Suspend stopping Hotplug work...\n");
 	
-	for_each_possible_cpu(cpu) 
-	{
+	for_each_possible_cpu(cpu){
 		if (cpu)
 			cpu_down(cpu);
-		
 	}
 
 	up_counter = 0;
 	down_counter = 0;
 }
 
-static void __ref resume_func(struct work_struct *work)
+static void __ref hotplug_resume(struct work_struct *work)
 {
-	int cpu, onlined = 0;
+	int cpu;
 	u64 now = ktime_to_ms(ktime_get());
 
 	idle_counter = 0;
@@ -310,180 +293,182 @@ static void __ref resume_func(struct work_struct *work)
 
 	boostpulse_endtime = now + boostpulse_duration_val;
 
-	for_each_possible_cpu(cpu) 
-	{
-		if (cpu) 
-		{
+	for_each_possible_cpu(cpu){
+		if (cpu){
 			cpu_up(cpu);
-			if (++onlined == 2)
-				break;
+			break;
 		}
 	}
-	
 	pr_info("Late Resume starting Hotplug work...\n");
-	queue_delayed_work(wq, &decide_hotplug, HZ);	
 }
 
 static void hotplug_early_suspend(struct early_suspend *handler)
-{	 
-	queue_work_on(0, pm_wq, &suspend);
+{   
+	schedule_work(&suspend);
 }
 
-static void hotplug_early_resume(struct early_suspend *handler)
-{  
-	queue_work_on(0, pm_wq, &resume);
+static void hotplug_late_resume(struct early_suspend *handler)
+{   
+	schedule_work(&resume);
 }
 
-static struct early_suspend hotplug_suspend =
+static struct early_suspend early_suspend =
 {
+	.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN,
 	.suspend = hotplug_early_suspend,
-	.resume = hotplug_early_resume,
+	.resume = hotplug_late_resume,
 };
 
 /*
  * Sysfs get/set entries start
  */
 
-static ssize_t up_threshold_show(struct hotplug_values *values, 
-	char *buf)
+unsigned int *find_value(unsigned int value, unsigned int type)
 {
-	int i;
+	struct hotplug_values *values;
+	unsigned int *ret;
+
+	switch (type){
+		case 0: values = &boost_values; break;
+		case 1: values = &busy_values; break;
+		case 2: values = &idle_values; break;
+		default: return NULL;
+	}
+
+	switch (value){
+		case 0: ret = values->up_threshold; break;
+		case 1: ret = values->down_threshold; break;
+		case 2: ret = values->max_up_counter; break;
+		case 3: ret = values->max_down_counter; break;
+		case 4: ret = &(values->sample_time_ms); break;
+		default: return NULL;
+	}
+	return ret;
+}
+
+ssize_t show_array(unsigned int value, unsigned int type,
+		char *buf)
+{
+	unsigned int *array;
+	unsigned int i;
 	ssize_t ret = 0;
+
+	array = find_value(value, type);
 
 	for (i = 0; i < CPU_CORES; i++)
 		ret += sprintf(buf + ret, "%u%s", 
-				values->up_threshold[i], 
+				array[i], 
 				i + 1 < CPU_CORES ? " " : "");
 
 	ret += sprintf(buf + ret, "\n");
 	return ret;
 }
 
-static ssize_t boost_up_threshold_show(struct device *dev, 
-		struct device_attribute *attr, char *buf)
+ssize_t show_value(unsigned int value, unsigned int type,
+						char *buf)
 {
-	return up_threshold_show(&boost_values, buf);
+	return sprintf(buf, "%u\n", *find_value(value, type));
 }
 
-static ssize_t busy_up_threshold_show(struct device *dev, 
-		struct device_attribute *attr, char *buf)
-{
-	return up_threshold_show(&busy_values, buf);
-}
-
-static ssize_t idle_up_threshold_show(struct device *dev, 
-		struct device_attribute *attr, char *buf)
-{
-	return up_threshold_show(&idle_values, buf);
-}
-
-static void array_store(const char *buf, unsigned int *values)
+static bool process_array(const char *buf, unsigned int *values)
 {
 	unsigned int new_values[CPU_CORES];
-	unsigned int i;
+	unsigned int space_count, num_len;
+	long temp;
 	const char *cp;
 	bool inval = true;
 	char valid[] = "0123456789 ";
+	char *space = " ";
 	char *val = valid;
-	char number[4];
-	long temp;
+	char number[3] = "";
 
 	cp = buf;
-	i = 0;
+	space_count = 0;
+	num_len = 0;
 
-	pr_info("Let's go!");
-	while (*cp != '\0')
-	{
+	do {
 		inval = true;
 		val = valid;
 
-		pr_info("Checking now: %c",*cp);
-		while (*val != '\0')
-		{
-			if (*cp == *(val++))
-			{
-				inval = false;
-				break;
+		if (*cp != '\0'){
+			while (*val != '\0'){
+				if (*cp == *(val++)){
+					inval = false;
+					break;
+				}
 			}
+			if (inval)
+				goto err_inval;
 		}
-
-		if (inval)
-			goto err_inval;
-		pr_info("Checking now: valid");
 		
-		if(*cp == ' ')
-		{
-			pr_info("' ' detected");
-			if(i >= CPU_CORES)
+		if (*cp == *space || *cp == '\0'){
+			if (space_count >= CPU_CORES)
 				goto err_inval;
 			
-			if (kstrtol(number, 10, &temp) != 0)
+			if (kstrtol(number, 10, &temp) < 0)
 				goto err_inval;
 
-			new_values[i] = (unsigned int) temp;
-			pr_info("new_values[%d] = %ld",i,temp);
-			i++;
-		}
-		else
-			strncat(number, cp, 1);
+			new_values[space_count] = 
+				(unsigned int) temp;
 			
+			space_count++;
+			num_len = 0;
+			strcpy(number, "");
+		} else if (++num_len <= 3)
+			strncat(number, cp, 1);
+		else
+			goto err_inval;
+	
 		cp++;
-	}
+
+	} while (*(cp - 1) != '\0');
+
+	if (space_count < CPU_CORES)
+		goto err_inval;
 
 	memcpy(values, new_values, sizeof(new_values));
 
+	pr_info("Values changed.\n");
+	return true;
 err_inval:
-	kfree(new_values);
-	return;
+	pr_info("Values invalid.\n");
+	return false;
 }
 
-static ssize_t boost_up_threshold_store(struct device *dev, 
-		struct device_attribute *attr, const char *buf, size_t size)
+bool store_array(unsigned int value, unsigned int type,
+					const char *buf)
 {
-	pr_info("%s, %d",buf,*boost_values.up_threshold);
-	array_store(buf, boost_values.up_threshold);
-	return size;
+	pr_info("Store hotplug values:\n");
+	pr_info("value: %u, type: %u, string: '%s'\n",
+		value, type, buf);
+
+	return process_array(buf, find_value(value, type));
 }
 
-static ssize_t busy_up_threshold_store(struct device *dev, 
-		struct device_attribute *attr, const char *buf, size_t size)
+bool store_value(unsigned int value, unsigned int type,
+					const char *buf)
 {
-	array_store(buf, busy_values.up_threshold);
-	return size;
+	unsigned long val;
+	unsigned int *data; 
+	data = find_value(value, type);
+
+	pr_info("Store hotplug value:\n");
+	pr_info("value: %u, type: %u, string: '%s'\n",
+		value, type, buf);
+
+	if (kstrtoul(buf, 0, &val) < 0){
+		pr_info("Value invalid.\n");
+		return false;
+	}
+
+	if (value == 4 && val < 10)
+		val = 10;
+
+	*data = (unsigned int) val;
+	pr_info("Value changed.\n");
+
+	return true;
 }
-
-static ssize_t idle_up_threshold_store(struct device *dev, 
-		struct device_attribute *attr, const char *buf, size_t size)
-{
-	array_store(buf, idle_values.up_threshold);
-	return size;
-}
-
-static DEVICE_ATTR(boost_up_threshold, 0664, boost_up_threshold_show, 
-						boost_up_threshold_store);
-static DEVICE_ATTR(busy_up_threshold, 0664, busy_up_threshold_show, 
-						busy_up_threshold_store);
-static DEVICE_ATTR(idle_up_threshold, 0664, idle_up_threshold_show, 
-						idle_up_threshold_store);
-
-static struct attribute *hotplug_control_attributes[] =
-{
-	&dev_attr_boost_up_threshold.attr,
-	&dev_attr_busy_up_threshold.attr,
-	&dev_attr_idle_up_threshold.attr,
-	NULL
-};
-
-static struct attribute_group hotplug_control_group =
-{
-	.attrs  = hotplug_control_attributes,
-};
-
-static struct miscdevice hotplug_control_device =
-{
-	.minor = MISC_DYNAMIC_MINOR,
-	.name = "hotplug_control",
-};
 
 /*
  * Sysfs get/set entries end
@@ -492,47 +477,25 @@ static struct miscdevice hotplug_control_device =
 static int __devinit hotplug_probe(struct platform_device *pdev)
 {
 	int ret = 0;
-	pr_info("Hotplug driver started.\n");
 
-	wq = alloc_workqueue("hotplug_workqueue", WQ_HIGHPRI | WQ_FREEZABLE, 1);
-	
-	if (!wq)
-	{
+	wq = alloc_workqueue("hotplug_workqueue", WQ_HIGHPRI 
+					| WQ_FREEZABLE, 0);
+    
+	if (!wq){
 		ret = -ENOMEM;
 		goto err;
 	}
 
-	ret = misc_register(&hotplug_control_device);
+	register_early_suspend(&early_suspend);
 
-	if (ret)
-	{
-		ret = -EINVAL;
-		goto err;
-	}
-
-	ret = sysfs_create_group(&hotplug_control_device.this_device->kobj,
-			&hotplug_control_group);
-
-	pm_wq = alloc_workqueue("pm_workqueue", 0, 1);
-	
-	if (!pm_wq)
-		ret = -ENOMEM;
-
-	if (ret)
-	{
-		ret = -EINVAL;
-		goto err;
-	}
-
+	INIT_WORK(&suspend, hotplug_suspend);
+	INIT_WORK(&resume, hotplug_resume);
 	INIT_DELAYED_WORK(&decide_hotplug, decide_hotplug_func);
-	INIT_WORK(&resume, resume_func);
-	INIT_WORK(&suspend, suspend_func);
-	queue_delayed_work(wq, &decide_hotplug, HZ*20);
-	
-	register_early_suspend(&hotplug_suspend);
 
+	queue_delayed_work_on(0, wq, &decide_hotplug, HZ * 30);
+    
 err:
-	return ret;
+	return ret;	
 }
 
 static struct platform_device hotplug_device = {
@@ -543,7 +506,6 @@ static struct platform_device hotplug_device = {
 static int hotplug_remove(struct platform_device *pdev)
 {
 	destroy_workqueue(wq);
-	destroy_workqueue(pm_wq);
 
 	return 0;
 }
@@ -563,15 +525,13 @@ static int __init hotplug_init(void)
 
 	ret = platform_driver_register(&hotplug_driver);
 
-	if (ret)
-	{
+	if (ret){
 		return ret;
 	}
 
 	ret = platform_device_register(&hotplug_device);
 
-	if (ret)
-	{
+	if (ret){
 		return ret;
 	}
 
