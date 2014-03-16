@@ -858,13 +858,13 @@ static ssize_t store_min_sample_time(struct interactive_vaules *values,
 static ssize_t store_idle_min_sample_time(struct kobject *kobj,
 			struct attribute *attr, const char *buf, size_t count)
 {
-	return store_min_sample_time(&busy_values, buf, count);
+	return store_min_sample_time(&idle_values, buf, count);
 }
 
 static ssize_t store_busy_min_sample_time(struct kobject *kobj,
 			struct attribute *attr, const char *buf, size_t count)
 {
-	return store_min_sample_time(&idle_values, buf, count);
+	return store_min_sample_time(&busy_values, buf, count);
 }
 
 static struct global_attr busy_min_sample_time_attr = __ATTR(busy_min_sample_time,
