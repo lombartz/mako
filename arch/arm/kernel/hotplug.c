@@ -65,19 +65,19 @@ boost_values = {
 	.up_threshold = {55, 60, 65, 100},
 	.down_threshold = {0, 20, 30, 40},
 	.max_up_counter = {4, 6, 6, 0},
-	.max_down_counter = {0, 150, 50, 50},
+	.max_down_counter = {0, 150, 50, 40},
 	.sample_time_ms = 20
 }, busy_values = {
 	.up_threshold = {60, 60, 65, 100},
 	.down_threshold = {0, 30, 30, 40},
-	.max_up_counter = {4, 6, 6, 0},
-	.max_down_counter = {0, 100, 10, 10},
+	.max_up_counter = {4, 5, 6, 0},
+	.max_down_counter = {0, 100, 26, 18},
 	.sample_time_ms = 30
 }, idle_values = {
 	.up_threshold = {80, 85, 90, 100},
 	.down_threshold = {0, 40, 50, 60},
 	.max_up_counter = {6, 10, 10, 0},
-	.max_down_counter = {0, 50, 6, 6},
+	.max_down_counter = {0, 30, 10, 6},
 	.sample_time_ms = 50
 };
 
